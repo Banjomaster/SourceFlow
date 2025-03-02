@@ -1,0 +1,58 @@
+```mermaid
+graph LR;
+  subgraph Path_0
+    generate_dependency_diagram_0[(generate_dependency_diagram)];
+    generate_dependency_diagram_0 ===> n__generate_dependency_mermaid_0;
+    n__generate_dependency_mermaid_0[_generate_dependency_mermaid];
+    n__generate_dependency_mermaid_0 ===> n__sanitize_name_0;
+    n__sanitize_name_0[_sanitize_name];
+  end
+  subgraph Path_1
+    analyze_file_1[(analyze_file)];
+  end
+  subgraph Path_2
+    get_file_stats_2[(get_file_stats)];
+  end
+  subgraph Path_3
+    main_3[(main)];
+    main_3 ===> analyze_project_3;
+    analyze_project_3[analyze_project];
+  end
+  subgraph Path_4
+    export_data_4[(export_data)];
+  end
+  subgraph Path_5
+    explore_5[(explore)];
+  end
+  subgraph Path_6
+    generate_function_diagram_6[(generate_function_diagram)];
+    generate_function_diagram_6 ===> n__generate_mermaid_6;
+    n__generate_mermaid_6[_generate_mermaid];
+    n__generate_mermaid_6 ===> n__sanitize_name_6;
+    n__sanitize_name_6[_sanitize_name];
+  end
+  subgraph Path_7
+    generate_execution_path_diagram_7[(generate_execution_path_diagram)];
+    generate_execution_path_diagram_7 ===> n__generate_execution_path_mermaid_7;
+    n__generate_execution_path_mermaid_7[_generate_execution_path_mermaid];
+    n__generate_execution_path_mermaid_7 ===> n__sanitize_name_7;
+    n__sanitize_name_7[_sanitize_name];
+  end
+  subgraph Path_8
+    get_summary_8[(get_summary)];
+    get_summary_8 ===> get_entry_point_paths_8;
+    get_entry_point_paths_8[get_entry_point_paths];
+    get_entry_point_paths_8 ===> n__trace_path_from_8;
+    n__trace_path_from_8[_trace_path_from];
+    n__trace_path_from_8 ===> get_function_callees_8;
+    get_function_callees_8[get_function_callees];
+  end
+  subgraph Path_9
+    n___init___9[(__init__)];
+    n___init___9 ===> n__check_graphviz_9;
+    n__check_graphviz_9[_check_graphviz];
+  end
+  subgraph Path_10
+    add_file_analysis_10[(add_file_analysis)];
+  end
+```
