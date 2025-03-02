@@ -374,11 +374,24 @@ class VisualizationGenerator:
         file_functions = builder_data.get('file_functions', {})
         entry_points = builder_data.get('entry_points', [])
         function_calls = builder_data.get('function_calls', {})
+        file_summaries = builder_data.get('file_summaries', {})
         
         # Print diagnostic info
         print(f"Generating Mermaid diagram with {len(function_details)} functions, {len(file_functions)} files, {len(entry_points)} entry points")
         
-        mermaid = "```mermaid\ngraph TD;\n"
+        # Use LR (left to right) layout for better readability with many nodes
+        mermaid = "```mermaid\ngraph LR;\n"
+        
+        # Add Mermaid directives for improved layout
+        mermaid += "  %% Configuration for better readability\n"
+        mermaid += "  linkStyle default stroke:#666,stroke-width:1px;\n"
+        
+        # Define node styling classes for better readability
+        mermaid += "  classDef default fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "  classDef entryPoint fill:#d4f1d4,stroke:#5ca75c,stroke-width:2px,color:black;\n"
+        mermaid += "  classDef utilityFunc fill:#e6f3ff,stroke:#4d8bc9,color:black;\n"
+        mermaid += "  classDef privateFunc fill:#f9f9f9,stroke:#999,stroke-dasharray:5 5,color:black;\n"
+        mermaid += "  classDef moduleHeader fill:#f0f0f0,stroke:#666,color:black,text-align:center;\n"
         
         # If no data, create a simple diagram showing the issue
         if not function_details and not file_functions:
@@ -392,28 +405,61 @@ class VisualizationGenerator:
                 continue
                 
             file_name = os.path.basename(file_path)
-            mermaid += f"  subgraph {self._sanitize_name(file_name)}\n"
+            file_summary = file_summaries.get(file_path, "")
+            
+            # Wrap and format the file summary for better readability
+            wrapped_summary = self._wrap_text(file_summary, 35)  # Slightly wider to reduce height
+            
+            # Add file subgraph with description
+            mermaid += f"  subgraph {self._sanitize_name(file_name)}[\"<b>{file_name}</b><br><i>{wrapped_summary}</i>\"]\n"
+            mermaid += f"    style {self._sanitize_name(file_name)} fill:#f0f0f0,stroke:#666,color:black;\n"
             
             for func_name in functions:
                 details = function_details.get(func_name, {})
                 description = details.get('description', '')
                 safe_name = self._sanitize_name(func_name)
                 
-                # Style entry points differently
+                # Wrap function description - wider width for less vertical space
+                wrapped_desc = ""
+                if description:
+                    wrapped_desc = "<br><i>" + self._wrap_text(description, 30) + "</i>"
+                
+                # Apply styling based on function type
+                is_private = func_name.startswith('_') and not func_name.startswith('__')
+                is_dunder = func_name.startswith('__') and func_name.endswith('__')
+                
+                # Style entry points with highest visibility
                 if func_name in entry_points:
-                    mermaid += f"    {safe_name}[({func_name})];\n"
+                    mermaid += f"    {safe_name}[\"<b>{func_name}</b>{wrapped_desc}\"]:::entryPoint;\n"
+                # Private utility functions get a distinct style
+                elif is_private and not is_dunder:
+                    mermaid += f"    {safe_name}[\"{func_name}{wrapped_desc}\"]:::privateFunc;\n"
+                # Dunder methods get a utility style
+                elif is_dunder:
+                    mermaid += f"    {safe_name}[\"{func_name}{wrapped_desc}\"]:::utilityFunc;\n"
+                # Regular functions get the default style
                 else:
-                    mermaid += f"    {safe_name}[{func_name}];\n"
+                    mermaid += f"    {safe_name}[\"{func_name}{wrapped_desc}\"];\n"
                     
             mermaid += "  end\n"
         
-        # Add connections
+        # Add connections with labels for the type of relationship
         for func_name, callees in function_calls.items():
             for callee in callees:
                 if callee in function_details:
                     safe_func = self._sanitize_name(func_name)
                     safe_callee = self._sanitize_name(callee)
-                    mermaid += f"  {safe_func} --> {safe_callee};\n"
+                    mermaid += f"  {safe_func} -->|\"calls\"| {safe_callee};\n"
+        
+        # Add comprehensive legend with all node types
+        mermaid += "  subgraph Legend[\"Legend\"]\n"
+        mermaid += "    style Legend fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "    entry[\"Entry Point\"]:::entryPoint;\n"
+        mermaid += "    regular[\"Regular Function\"];\n"
+        mermaid += "    utility[\"Special Method\"]:::utilityFunc;\n"
+        mermaid += "    private[\"Private Helper\"]:::privateFunc;\n"
+        mermaid += "    entry -->|\"calls\"| regular;\n"
+        mermaid += "  end\n"
         
         mermaid += "```"
         return mermaid
@@ -426,7 +472,18 @@ class VisualizationGenerator:
         # Print diagnostic info
         print(f"Generating dependency Mermaid diagram with {len(file_summaries)} files, {len(file_dependencies)} dependencies")
         
+        # Use LR layout for better readability
         mermaid = "```mermaid\ngraph LR;\n"
+        
+        # Add Mermaid directives for improved layout
+        mermaid += "  %% Configuration for better readability\n"
+        mermaid += "  linkStyle default stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5;\n"
+        
+        # Define styling classes
+        mermaid += "  classDef default fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "  classDef pythonModule fill:#e6f3ff,stroke:#4d8bc9,color:black;\n"
+        mermaid += "  classDef configFile fill:#fff7e6,stroke:#d9b38c,color:black;\n"
+        mermaid += "  classDef mainFile fill:#d4f1d4,stroke:#5ca75c,color:black;\n"
         
         # If no data, create a simple diagram showing the issue
         if not file_summaries:
@@ -434,63 +491,154 @@ class VisualizationGenerator:
             mermaid += "```"
             return mermaid
             
-        # Add nodes for each file
+        # Add nodes for each file with wrapped module descriptions
         for file_path in file_summaries:
             file_name = os.path.basename(file_path)
             safe_name = self._sanitize_name(file_path)
-            mermaid += f"  {safe_name}[\"{file_name}\"];\n"
+            summary = file_summaries.get(file_path, "")
+            
+            # Create a wrapped description for better readability
+            wrapped_summary = self._wrap_text(summary, 30)  # Wider for less vertical space
+            label = f"<b>{file_name}</b><br>{wrapped_summary}"
+            
+            # Style nodes based on file type
+            if file_name.startswith('__') and file_name.endswith('__.py'):
+                mermaid += f"  {safe_name}[\"{label}\"]:::pythonModule;\n"
+            elif file_name in ['main.py', 'run_analyzer.py']:
+                mermaid += f"  {safe_name}[\"{label}\"]:::mainFile;\n"
+            elif file_name.endswith('.py'):
+                mermaid += f"  {safe_name}[\"{label}\"]:::pythonModule;\n"
+            else:
+                mermaid += f"  {safe_name}[\"{label}\"]:::configFile;\n"
         
-        # Add connections
+        # Add connections with relationship type (dependency)
         for file_path, dependencies in file_dependencies.items():
             safe_file = self._sanitize_name(file_path)
             for dependency in dependencies:
                 if dependency in file_summaries:
                     safe_dep = self._sanitize_name(dependency)
-                    mermaid += f"  {safe_file} -.-> {safe_dep};\n"
+                    # Use a different arrow style with a small label
+                    mermaid += f"  {safe_file} -.-|\"imports\"| {safe_dep};\n"
+        
+        # Add legend with improved styling
+        mermaid += "  subgraph Legend[\"Legend\"]\n"
+        mermaid += "    style Legend fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "    mainLegend[\"Entry Point\"]:::mainFile;\n"
+        mermaid += "    moduleLegend[\"Python Module\"]:::pythonModule;\n"
+        mermaid += "    configLegend[\"Configuration\"]:::configFile;\n"
+        mermaid += "    mainLegend -.-|\"imports\"| moduleLegend;\n"
+        mermaid += "  end\n"
         
         mermaid += "```"
         return mermaid
     
+    def _wrap_text(self, text: str, width: int) -> str:
+        """
+        Wrap text to a specified width with HTML line breaks for Mermaid diagrams.
+        
+        Args:
+            text: The text to wrap
+            width: Maximum width in characters
+            
+        Returns:
+            Wrapped text with HTML <br> tags
+        """
+        if not text:
+            return "No description available"
+            
+        words = text.split()
+        lines = []
+        current_line = []
+        current_width = 0
+        
+        for word in words:
+            # Check if adding this word would exceed the width
+            if current_width + len(word) + (1 if current_width > 0 else 0) > width:
+                # Line is full, add it to lines and start a new line
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+                current_width = len(word)
+            else:
+                # Add word to current line
+                current_line.append(word)
+                current_width += len(word) + (1 if current_width > 0 else 0)
+        
+        # Add the last line if not empty
+        if current_line:
+            lines.append(' '.join(current_line))
+            
+        # Join lines with HTML line breaks
+        return '<br>'.join(lines)
+    
     def _generate_execution_path_mermaid(self, builder_data: Dict[str, Any]) -> str:
         """Generate Mermaid syntax for execution path diagram."""
-        entry_point_paths = builder_data.get('entry_point_paths', [])
         function_details = builder_data.get('function_details', {})
+        execution_paths = builder_data.get('entry_point_paths', [])  # Use entry_point_paths from builder data
         
         # Print diagnostic info
-        print(f"Generating execution path Mermaid diagram with {len(entry_point_paths)} paths, {len(function_details)} functions")
+        total_funcs = sum(len(path) for path in execution_paths)
+        print(f"Generating execution path Mermaid diagram with {len(execution_paths)} paths, {len(function_details)} functions")
         
+        # Use LR layout for better readability
         mermaid = "```mermaid\ngraph LR;\n"
         
+        # Add Mermaid directives for improved layout
+        mermaid += "  %% Configuration for better readability\n"
+        mermaid += "  linkStyle default stroke:#666,stroke-width:2px,stroke-dasharray:3 2;\n"
+        
         # If no data, create a simple diagram showing the issue
-        if not entry_point_paths:
+        if not execution_paths:
             mermaid += "  noData[\"No execution path data available\"];\n"
             mermaid += "```"
             return mermaid
-            
-        # Process each execution path
-        for i, path in enumerate(entry_point_paths):
+        
+        # Define styling classes
+        mermaid += "  classDef default fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "  classDef entryPoint fill:#d4f1d4,stroke:#5ca75c,stroke-width:2px,color:black;\n"
+        mermaid += "  classDef pathFunc fill:#f5f5f5,stroke:#666666,color:black;\n"
+        mermaid += "  classDef pathHeader fill:#eaeaea,stroke:#555,color:black,text-align:center;\n"
+        
+        # Create subgraphs for each execution path
+        for i, path in enumerate(execution_paths):
             if not path:
                 continue
                 
-            mermaid += f"  subgraph Path_{i}\n"
+            mermaid += f"  subgraph Path_{i}[\"<b>Execution Path {i+1}</b>\"]\n"
+            mermaid += f"    style Path_{i} fill:#eaeaea,stroke:#555,color:black;\n"
             
-            # Add nodes and connections for this path
+            # Add nodes for functions in this path
             for j, func_name in enumerate(path):
+                details = function_details.get(func_name, {})
+                description = details.get('description', '')
                 safe_name = f"{self._sanitize_name(func_name)}_{i}"
                 
-                # Style entry point differently
-                if j == 0:
-                    mermaid += f"    {safe_name}[({func_name})];\n"
-                else:
-                    mermaid += f"    {safe_name}[{func_name}];\n"
+                # Wrap function description - wider width for less vertical space
+                wrapped_desc = ""
+                if description:
+                    wrapped_desc = "<br><i>" + self._wrap_text(description, 30) + "</i>"
                 
-                # Add connection to next function
+                # First function in path is an entry point
+                if j == 0:
+                    mermaid += f"    {safe_name}[\"<b>{func_name}</b>{wrapped_desc}\"]:::entryPoint;\n"
+                else:
+                    mermaid += f"    {safe_name}[\"{func_name}{wrapped_desc}\"]:::pathFunc;\n"
+                
+                # Add connection to next function in path with numbered sequence
                 if j < len(path) - 1:
                     next_func = path[j + 1]
                     safe_next = f"{self._sanitize_name(next_func)}_{i}"
-                    mermaid += f"    {safe_name} ===> {safe_next};\n"
-            
+                    mermaid += f"    {safe_name} ===>|\"step {j+1}\"| {safe_next};\n"
+                
             mermaid += "  end\n"
+        
+        # Add legend with improved styling
+        mermaid += "  subgraph Legend[\"Legend\"]\n"
+        mermaid += "    style Legend fill:#f9f9f9,stroke:#999,color:black;\n"
+        mermaid += "    entryLegend[\"Entry Point\"]:::entryPoint;\n"
+        mermaid += "    funcLegend[\"Function Call\"]:::pathFunc;\n"
+        mermaid += "    entryLegend ===>|\"execution step\"| funcLegend;\n"
+        mermaid += "  end\n"
         
         mermaid += "```"
         return mermaid
