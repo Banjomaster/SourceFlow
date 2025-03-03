@@ -1,4 +1,4 @@
-# Code Project Analyzer - Product Requirements Document (PRD)
+# SourceFlow - Product Requirements Document (PRD)
 
 ## 1. Introduction
 
@@ -128,6 +128,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Legends explaining diagram elements
 - Optimized Mermaid diagram rendering with simplified styling
 - Interactive HTML viewers for diagrams
+- Deterministic node name sanitization for reliable testing
+- Robust visualization output testing against gold standards
 
 ### 4.2 In Progress Items ⏳
 - Additional visualization customization options
@@ -204,7 +206,14 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Verify correct relationship mapping
 - Validate diagram generation
 
-### 6.3 Test Datasets
+### 6.3 Visualization Testing
+- Compare generated visualizations against gold standard files
+- Test deterministic node naming and sanitization
+- Ensure visualization output is consistent and reliable
+- Use direct Mermaid file comparisons for robust testing
+- Allow for reasonable whitespace and formatting differences
+
+### 6.4 Test Datasets
 - Small Python project (< 10 files)
 - Medium mixed-language project (20-50 files)
 - Open-source project samples for realistic testing
