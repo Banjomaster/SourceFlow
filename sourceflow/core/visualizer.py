@@ -649,355 +649,23 @@ class VisualizationGenerator:
     
     def _sanitize_name(self, name: str) -> str:
         """
-        Convert a function or file name to a valid ID for Graphviz and Mermaid.
+        Sanitize function names for graphviz.
         
         Args:
-            name: The original name
+            name: The name to sanitize
             
         Returns:
-            A sanitized version of the name
+            The sanitized name
         """
-        # Replace invalid characters
-        sanitized = name.replace('.', '_').replace('/', '_').replace('\\', '_')
-        sanitized = sanitized.replace(':', '_').replace(' ', '_').replace('-', '_')
-        sanitized = sanitized.replace('(', '_').replace(')', '_').replace('[', '_').replace(']', '_')
-        sanitized = sanitized.replace('{', '_').replace('}', '_').replace('<', '_').replace('>', '_')
-        sanitized = sanitized.replace('?', '_').replace('!', '_').replace('=', '_').replace('@', '_')
-        sanitized = sanitized.replace('&', '_').replace('*', '_').replace('+', '_').replace('~', '_')
-        sanitized = sanitized.replace('`', '_').replace('\'', '_').replace('"', '_').replace('|', '_')
-        sanitized = sanitized.replace(',', '_').replace(';', '_')
+        # Replace special characters with underscores
+        sanitized = re.sub(r'[^\w]', '_', name)
         
-        # Ensure it starts with a letter
-        if sanitized and not sanitized[0].isalpha():
-            sanitized = 'n_' + sanitized
-            
-        # Ensure uniqueness by adding a prefix
-        sanitized = 'node_' + sanitized
+        # If the name starts with a digit, prepend an underscore
+        if sanitized and sanitized[0].isdigit():
+            sanitized = '_' + sanitized
             
         return sanitized
     
-    def export_data(self, builder_data: Dict[str, Any], output_name: str = "analysis_data") -> str:
-        """
-        Export the analysis data to a JSON file.
-        
-        Args:
-            builder_data: Data from the RelationshipBuilder's get_summary method
-            output_name: Base name for the output file
-            
-        Returns:
-            Path to the output file
-        """
-        output_path = os.path.join(self.output_dir, f"{output_name}.json")
-        with open(output_path, 'w') as f:
-            json.dump(builder_data, f, indent=2)
-        return output_path
-        
-    def generate_html_viewer(self, builder_data: Dict[str, Any], output_name: str = "interactive_viewer") -> str:
-        """
-        Generates an interactive HTML viewer for all diagram types that allows
-        zooming, panning, and exploring different levels of detail.
-        
-        Args:
-            builder_data: Data from the RelationshipBuilder's get_summary method
-            output_name: Base name for the output HTML file
-            
-        Returns:
-            Path to the generated HTML file
-        """
-        # Generate all Mermaid diagrams
-        mermaid_structure = self._generate_mermaid(builder_data)
-        mermaid_dependencies = self._generate_dependency_mermaid(builder_data)
-        mermaid_execution = self._generate_execution_path_mermaid(builder_data)
-        
-        # Save raw diagram content to files for debugging
-        def save_debug_file(content, name):
-            debug_path = os.path.join(self.output_dir, f"{name}_raw.md")
-            with open(debug_path, 'w') as f:
-                f.write(content)
-            print(f"Saved raw {name} content to {debug_path}")
-        
-        # Save the original content before processing
-        save_debug_file(mermaid_structure, "structure")
-        save_debug_file(mermaid_dependencies, "dependencies")
-        save_debug_file(mermaid_execution, "execution")
-        
-        # Process each diagram and ensure valid Mermaid syntax
-        structure_content = self._ensure_valid_mermaid_syntax(mermaid_structure, default_type="graph TD")
-        dependencies_content = self._ensure_valid_mermaid_syntax(mermaid_dependencies, default_type="graph LR")
-        execution_content = self._ensure_valid_mermaid_syntax(mermaid_execution, default_type="graph LR")
-        
-        # Generate individual HTML files for each diagram
-        self._generate_individual_diagram_html(structure_content, "code_structure_diagram", "Code Structure Diagram",
-            "This diagram shows the overall structure of the codebase, including functions, classes, and their relationships.")
-        self._generate_individual_diagram_html(dependencies_content, "dependencies_diagram", "Module Dependencies Diagram",
-            "This diagram illustrates the relationships between modules in the codebase, showing how files depend on one another and the overall architecture of the system.")
-        self._generate_individual_diagram_html(execution_content, "execution_paths_diagram", "Execution Paths Diagram",
-            "This diagram shows the major execution paths from entry points, illustrating the flow of execution through different functions and modules.")
-        
-        # Create a simplified HTML template with links to each diagram
-        html_template = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Source Flow Analysis</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f5f5f5;
-            line-height: 1.6;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .header {
-            padding: 15px 20px;
-            background-color: #333;
-            color: white;
-        }
-        .title {
-            font-size: 1.8em;
-            margin: 0;
-        }
-        .search-box {
-            margin: 20px;
-            padding: 10px;
-        }
-        .search-box input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        .tab-container {
-            display: flex;
-            padding: 0 20px;
-            border-bottom: 1px solid #ddd;
-        }
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            background-color: #f0f0f0;
-            border: 1px solid #ddd;
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
-            margin-right: 5px;
-        }
-        .tab:hover {
-            background-color: #e0e0e0;
-        }
-        .tab.active {
-            background-color: white;
-            border-bottom: 1px solid white;
-            margin-bottom: -1px;
-            font-weight: bold;
-        }
-        .content {
-            padding: 20px;
-            flex: 1;
-        }
-        .card {
-            background-color: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .card h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        .card p {
-            color: #666;
-        }
-        .button {
-            display: inline-block;
-            background-color: #4d8bc9;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 4px;
-            text-decoration: none;
-            margin-top: 10px;
-        }
-        .button:hover {
-            background-color: #3a6d99;
-        }
-        .legend {
-            display: flex;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-right: 20px;
-            margin-bottom: 10px;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            margin-right: 8px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1 class="title">Source Flow Analysis</h1>
-    </div>
-    
-    <div class="search-box">
-        <input type="text" placeholder="Search for functions, modules, or descriptions...">
-    </div>
-    
-    <div class="tab-container">
-        <div class="tab active">Code Structure</div>
-        <div class="tab">Dependencies</div>
-        <div class="tab">Execution Paths</div>
-    </div>
-    
-    <div class="content">
-        <div class="card">
-            <h3>Dependencies Overview</h3>
-            <p>This view illustrates the relationships between modules in the codebase, showing how files depend on one another and how they interact. This hierarchy helps understand how changes in one module might affect others and identifies the core components.</p>
-            
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #d4f1d4;"></div>
-                    <span>Entry Point File</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #e6f3ff;"></div>
-                    <span>Python Module</span>
-                </div>
-            </div>
-            
-            <a href="./code_structure_diagram.html" class="button">Visualize Full Diagram</a>
-        </div>
-        
-        <div class="card">
-            <h3>Code Structure</h3>
-            <p>This diagram shows the overall structure of the codebase, including functions, classes, and their relationships.</p>
-            <a href="./code_structure_diagram.html" class="button">Visualize Full Diagram</a>
-        </div>
-        
-        <div class="card">
-            <h3>Module Dependencies</h3>
-            <p>This diagram illustrates the relationships between modules in the codebase, showing how files depend on one another and the overall architecture of the system.</p>
-            <a href="./dependencies_diagram.html" class="button">Visualize Full Diagram</a>
-        </div>
-        
-        <div class="card">
-            <h3>Execution Paths</h3>
-            <p>This diagram shows the major execution paths from entry points, illustrating the flow of execution through different functions and modules.</p>
-            <a href="./execution_paths_diagram.html" class="button">Visualize Full Diagram</a>
-        </div>
-    </div>
-    
-    <script>
-        // Simple search functionality
-        document.querySelector('input').addEventListener('keyup', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            document.querySelectorAll('.card').forEach(card => {
-                const text = card.textContent.toLowerCase();
-                if (text.includes(searchTerm) || searchTerm === '') {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        });
-        
-        // Tab switching functionality
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-            });
-        });
-    </script>
-</body>
-</html>"""
-        
-        # Replace the placeholders with the actual content
-        html_template = html_template.replace("STRUCTURE_CONTENT_PLACEHOLDER", structure_content)
-        html_template = html_template.replace("DEPENDENCIES_CONTENT_PLACEHOLDER", dependencies_content)
-        html_template = html_template.replace("EXECUTION_CONTENT_PLACEHOLDER", execution_content)
-        
-        # Save the HTML content to a file
-        output_path = os.path.join(self.output_dir, f"{output_name}.html")
-        self.save_html_visualization(html_template, output_path)
-        
-        return output_path
-
-    def save_html_visualization(self, html_content, output_path):
-        """
-        Save the HTML visualization to a file.
-        
-        Args:
-            html_content: The HTML content to save
-            output_path: The path to save the HTML file to
-        """
-        try:
-            with open(output_path, 'w') as f:
-                f.write(html_content)
-            print(f"Visualization saved to {output_path}")
-            return True
-        except Exception as e:
-            print(f"Error saving visualization: {e}")
-            return False
-
-    def visualize_codebase(self, output_name="codebase_visualization", open_browser=True):
-        """
-        Generate a visualization of the codebase and save it as an HTML file.
-        
-        Args:
-            output_name: The base name for the output file (without extension)
-            open_browser: Whether to open the visualization in a browser
-            
-        Returns:
-            str: The path to the generated visualization file
-        """
-        os.makedirs(self.output_dir, exist_ok=True)
-        
-        # Generate the structure diagram
-        structure_content = self._generate_structure_diagram()
-        
-        # Generate the dependencies diagram
-        dependencies_content = self._generate_dependencies_diagram()
-        
-        # Generate the execution paths diagram
-        execution_content = self._generate_execution_paths_diagram()
-        
-        # Ensure all diagrams have the proper syntax
-        structure_content = self._ensure_valid_mermaid_syntax(structure_content, "graph TD")
-        dependencies_content = self._ensure_valid_mermaid_syntax(dependencies_content, "graph LR")
-        execution_content = self._ensure_valid_mermaid_syntax(execution_content, "flowchart TD")
-        
-        # Generate the HTML visualization
-        html_content = self.generate_html_visualization(
-            structure_content,
-            dependencies_content,
-            execution_content
-        )
-        
-        # Save the HTML content to a file
-        output_path = os.path.join(self.output_dir, f"{output_name}.html")
-        self.save_html_visualization(html_content, output_path)
-        
-        # Open the visualization in a browser if requested
-        if open_browser:
-            try:
-                webbrowser.open(f"file://{os.path.abspath(output_path)}")
-                print(f"Opened visualization in browser: {output_path}")
-            except Exception as e:
-                print(f"Error opening visualization in browser: {e}")
-        
-        return output_path
-        
     def _ensure_valid_mermaid_syntax(self, diagram_content, default_type):
         """
         Ensure the diagram content has valid Mermaid syntax.
@@ -1022,151 +690,23 @@ class VisualizationGenerator:
         
         # If not, add the default type
         if not has_valid_start:
-            diagram_content = f"{default_type}\n{diagram_content}"
-        
-        # Fix common syntax errors
-        # 1. Ensure nodes have valid names (alphanumeric or enclosed in quotes)
-        # 2. Add missing edge types (-- or -->)
-        # This is a basic implementation and may need enhancement for more complex issues
-        
+            diagram_content = f"{default_type}\n    {diagram_content}"
+            
         return diagram_content
-
-    def _generate_structure_diagram(self):
-        """
-        Generate a Mermaid diagram representing the structure of the codebase.
-        
-        Returns:
-            str: The Mermaid diagram content as a string
-        """
-        if not self.codebase or not hasattr(self.codebase, 'modules') or not self.codebase.modules:
-            return "graph TD\n    A[No module data available]"
-        
-        diagram = "graph TD\n"
-        
-        # Create nodes for each module
-        for module in self.codebase.modules:
-            module_id = self._sanitize_id(module.name)
-            diagram += f"    {module_id}[{module.name}]\n"
-        
-        # Add connections between modules
-        for module in self.codebase.modules:
-            if hasattr(module, 'imports') and module.imports:
-                module_id = self._sanitize_id(module.name)
-                for imported_module in module.imports:
-                    imported_id = self._sanitize_id(imported_module)
-                    diagram += f"    {module_id} --> {imported_id}\n"
-        
-        return diagram
     
-    def _generate_dependencies_diagram(self):
-        """
-        Generate a Mermaid diagram representing the dependencies between modules.
-        
-        Returns:
-            str: The Mermaid diagram content as a string
-        """
-        if not self.codebase or not hasattr(self.codebase, 'modules') or not self.codebase.modules:
-            return "graph LR\n    A[No dependency data available]"
-        
-        diagram = "graph LR\n"
-        
-        # Group modules by package/directory
-        packages = {}
-        for module in self.codebase.modules:
-            parts = module.name.split('.')
-            if len(parts) > 1:
-                package = parts[0]
-                if package not in packages:
-                    packages[package] = []
-                packages[package].append(module)
-            else:
-                if "root" not in packages:
-                    packages["root"] = []
-                packages["root"].append(module)
-        
-        # Create subgraphs for each package
-        for package, modules in packages.items():
-            package_id = self._sanitize_id(package)
-            diagram += f"    subgraph {package_id}[{package}]\n"
-            
-            for module in modules:
-                module_id = self._sanitize_id(module.name)
-                diagram += f"        {module_id}[{module.name.split('.')[-1]}]\n"
-            
-            diagram += "    end\n"
-        
-        # Add connections between modules
-        for module in self.codebase.modules:
-            if hasattr(module, 'imports') and module.imports:
-                module_id = self._sanitize_id(module.name)
-                for imported_module in module.imports:
-                    imported_id = self._sanitize_id(imported_module)
-                    diagram += f"    {module_id} --> {imported_id}\n"
-        
-        return diagram
-    
-    def _generate_execution_paths_diagram(self):
-        """
-        Generate a Mermaid diagram representing the execution paths in the codebase.
-        
-        Returns:
-            str: The Mermaid diagram content as a string
-        """
-        if not self.codebase or not hasattr(self.codebase, 'entry_points') or not self.codebase.entry_points:
-            return "flowchart TD\n    A[No execution path data available]"
-        
-        diagram = "flowchart TD\n"
-        
-        # Create nodes for each entry point
-        for i, entry_point in enumerate(self.codebase.entry_points):
-            entry_id = f"entry{i}"
-            diagram += f"    {entry_id}[{entry_point}]\n"
-        
-            # If we have function calls for this entry point, add them
-            if hasattr(self.codebase, 'function_calls') and entry_point in self.codebase.function_calls:
-                calls = self.codebase.function_calls[entry_point]
-                for j, call in enumerate(calls):
-                    call_id = f"{entry_id}_call{j}"
-                    call_name = call if isinstance(call, str) else call.get('name', f"Call {j}")
-                    diagram += f"    {entry_id} --> {call_id}[{call_name}]\n"
-        
-        return diagram
-    
-    def _sanitize_id(self, id_str):
-        """
-        Sanitize a string to be used as a Mermaid node ID.
-        
-        Args:
-            id_str: The string to sanitize
-            
-        Returns:
-            str: The sanitized string
-        """
-        # Replace dots and other invalid characters with underscores
-        sanitized = re.sub(r'[^a-zA-Z0-9]', '_', str(id_str))
-        
-        # If the ID starts with a number, prepend an underscore
-        if sanitized and sanitized[0].isdigit():
-            sanitized = '_' + sanitized
-        
-        return sanitized
-
     def _generate_individual_diagram_html(self, diagram_content, output_name, title, description):
         """
-        Generates an individual HTML file for a specific diagram with simplified styling.
-        
+        Generate an individual HTML file for a Mermaid diagram.
+
         Args:
             diagram_content: The Mermaid diagram content
-            output_name: Base name for the output HTML file
-            title: The title to display in the HTML file
+            output_name: The base name for the output file
+            title: The title for the HTML page
             description: A description of the diagram
-            
+
         Returns:
-            Path to the generated HTML file
+            str: The path to the generated HTML file
         """
-        output_path = os.path.join(self.output_dir, f"{output_name}.html")
-        
-        # Create HTML template with minimal styling that lets Mermaid handle the display
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1264,6 +804,20 @@ class VisualizationGenerator:
         :root {{
             --mermaid-font-family: Arial, sans-serif;
         }}
+        .call-path::before {{
+            content: "→ ";
+            color: #999;
+        }}
+        .call-steps {{
+            color: #666;
+            margin: 5px 0;
+            font-size: 14px;
+            padding-left: 20px;
+        }}
+        .call-steps::before {{
+            content: "→ ";
+            color: #999;
+        }}
     </style>
 </head>
 <body>
@@ -1271,12 +825,12 @@ class VisualizationGenerator:
         <h1 class="title">{title}</h1>
         <a href="./custom_viewer.html" class="back-button">Back to Overview</a>
     </div>
-    
+
     <div class="controls-container">
         <div class="info-box">
             <div>{description}</div>
         </div>
-        
+
         <div class="zoom-controls">
             <button class="zoom-button" id="zoom-out">-</button>
             <span id="zoom-level">150%</span>
@@ -1284,120 +838,777 @@ class VisualizationGenerator:
             <button class="zoom-button" id="zoom-reset">R</button>
         </div>
     </div>
-    
+
     <div class="diagram-container">
         <div id="mermaid-diagram" class="mermaid">
 {diagram_content}
         </div>
     </div>
-    
+
     <script>
-        // Initialize Mermaid with better configurations
+        // Configure Mermaid based on diagram type for optimal rendering
         function configureMermaidByDiagramType() {{
-            const mermaidText = document.querySelector('.mermaid').textContent;
-            
-            // Count nodes and subgraphs to determine complexity
-            const nodeCount = (mermaidText.match(/\\["/g) || []).length;
-            const subgraphCount = (mermaidText.match(/subgraph/g) || []).length;
-            
-            console.log(`Diagram complexity: ${{nodeCount}} nodes, ${{subgraphCount}} subgraphs`);
-            
-            // Adjust settings based on complexity
-            let rankSpacing = 200;
-            let nodeSpacing = 150;
-            let padding = 80;
-            
-            if (nodeCount > 50 || subgraphCount > 10) {{
-                // Very complex diagram
-                rankSpacing = 250;
-                nodeSpacing = 180;
-                padding = 100;
-            }} else if (nodeCount < 10 && subgraphCount < 3) {{
-                // Simple diagram
-                rankSpacing = 150;
-                nodeSpacing = 100;
-                padding = 60;
-            }}
-            
-            return {{
+            const diagramText = document.querySelector('.mermaid').textContent;
+            const config = {{
                 startOnLoad: true,
+                theme: 'default',
                 securityLevel: 'loose',
                 flowchart: {{
                     useMaxWidth: false,
                     htmlLabels: true,
                     curve: 'basis',
-                    rankSpacing: rankSpacing,
-                    nodeSpacing: nodeSpacing,
-                    padding: padding,
-                    rankDir: 'LR'
+                    rankSpacing: 200,       // Dramatically increased spacing between ranks for better enclosure
+                    nodeSpacing: 150,       // Dramatically increased spacing between nodes
+                    padding: 80,            // Significantly increased padding around subgraphs
+                    ranker: 'longest-path',  // More space-efficient layout for complex diagrams
+                    diagramPadding: 30,     // Add padding around the entire diagram
+                    labelPosition: 'center', // Try to force center positioning of labels
+                    defaultRenderer: 'dagre-wrapper', // Ensure consistent rendering
+                }},
+                themeVariables: {{
+                    fontSize: '14px',
+                    fontFamily: 'Arial, sans-serif',
+                    primaryColor: '#e6f3ff',
+                    primaryTextColor: '#333',
+                    primaryBorderColor: '#4d8bc9',
+                    lineColor: '#666',
+                    secondaryColor: '#f9f9f9',
+                    tertiaryColor: '#f5f5f5'
                 }}
             }};
+
+            // Detect if diagram has many subgraphs (complex structure)
+            const subgraphCount = (diagramText.match(/subgraph/g) || []).length;
+
+            // Detect if diagram has many nodes
+            const nodeCount = (diagramText.match(/\\[.*?\\]/g) || []).length;
+
+            // Adjust configuration based on complexity
+            if (subgraphCount > 5 || nodeCount > 15) {{
+                // For complex diagrams with many nodes or subgraphs
+                config.flowchart.nodeSpacing = 100;
+                config.flowchart.rankSpacing = 150;
+                config.flowchart.padding = 80;
+            }} else {{
+                // For simpler diagrams
+                config.flowchart.nodeSpacing = 150;
+                config.flowchart.rankSpacing = 200;
+                config.flowchart.padding = 100;
+            }}
+
+            return config;
         }}
 
-        // Initialize Mermaid
+        // Initialize Mermaid with the configuration
         mermaid.initialize(configureMermaidByDiagramType());
 
-        // Render the diagram after the page loads
-        document.addEventListener('DOMContentLoaded', function() {{
-            // Initialize mermaid rendering with robust error handling
-            try {{
-                mermaid.init(undefined, '.mermaid');
-            }} catch (e) {{
-                console.error("Mermaid initialization error:", e);
-            }}
-            
-            // Add zoom and pan functionality
-            const diagram = document.getElementById('mermaid-diagram');
-            let scale = 2.0; // Start with higher zoom level
-            let dragEnabled = false;
-            let dragStartX, dragStartY, scrollLeft, scrollTop;
-            
-            function updateZoom() {{
-                if (diagram) {{
-                    diagram.style.transform = `scale(${{scale}})`;
-                }}
-                const zoomLevelEl = document.getElementById('zoom-level');
-                if (zoomLevelEl) {{
-                    zoomLevelEl.textContent = `${{Math.round(scale * 100)}}%`;
-                }}
-            }}
-            
-            // Set initial zoom
+        // Zoom functionality
+        let zoomLevel = 1.5;
+        const mermaidDiv = document.getElementById('mermaid-diagram');
+        const zoomLevelDisplay = document.getElementById('zoom-level');
+
+        // Apply initial zoom
+        updateZoom();
+
+        // Update zoom level display and apply zoom
+        function updateZoom() {{
+            zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
+            mermaidDiv.style.transform = `scale(${{zoomLevel}})`;
+        }}
+
+        // Zoom in
+        document.getElementById('zoom-in').addEventListener('click', () => {{
+            zoomLevel = Math.min(zoomLevel + 0.1, 3);
             updateZoom();
-            
-            // Add event listeners for zoom controls with explicit null checks
-            const zoomInButton = document.getElementById('zoom-in');
-            if (zoomInButton) {{
-                zoomInButton.addEventListener('click', function() {{
-                    scale = Math.min(scale + 0.1, 4.0);
-                    updateZoom();
-                }});
-            }}
-            
-            const zoomOutButton = document.getElementById('zoom-out');
-            if (zoomOutButton) {{
-                zoomOutButton.addEventListener('click', function() {{
-                    scale = Math.max(scale - 0.1, 0.1);
-                    updateZoom();
-                }});
-            }}
-            
-            const zoomResetButton = document.getElementById('zoom-reset');
-            if (zoomResetButton) {{
-                zoomResetButton.addEventListener('click', function() {{
-                    scale = 2.0;
-                    updateZoom();
-                }});
-            }}
+        }});
+
+        // Zoom out
+        document.getElementById('zoom-out').addEventListener('click', () => {{
+            zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
+            updateZoom();
+        }});
+
+        // Reset zoom
+        document.getElementById('zoom-reset').addEventListener('click', () => {{
+            zoomLevel = 1.5;
+            updateZoom();
         }});
     </script>
 </body>
 </html>"""
         
-        # Save the HTML content to a file
-        with open(output_path, 'w', encoding='utf-8') as f:
+        # Save the HTML file
+        output_path = os.path.join(self.output_dir, f"{output_name}.html")
+        with open(output_path, 'w') as f:
             f.write(html_template)
+            
+        return output_path
+
+    def export_data(self, builder_data: Dict[str, Any], output_name: str = "analysis_data") -> str:
+        """
+        Export the analysis data to a JSON file.
         
+        Args:
+            builder_data: Data from the RelationshipBuilder's get_summary method
+            output_name: Base name for the output file
+            
+        Returns:
+            Path to the output file
+        """
+        output_path = os.path.join(self.output_dir, f"{output_name}.json")
+        with open(output_path, 'w') as f:
+            json.dump(builder_data, f, indent=2)
+        return output_path
+        
+    def generate_html_viewer(self, builder_data: Dict[str, Any], output_name: str = "interactive_viewer") -> str:
+        """
+        Generates an interactive HTML viewer for all diagram types that allows
+        zooming, panning, and exploring different levels of detail.
+        
+        Args:
+            builder_data: Data from the RelationshipBuilder's get_summary method
+            output_name: Base name for the output HTML file
+            
+        Returns:
+            Path to the generated HTML file
+        """
+        # Define output path for the HTML file
+        output_path = os.path.join(self.output_dir, f"{output_name}.html")
+        
+        # Generate all Mermaid diagrams
+        mermaid_structure = self._generate_mermaid(builder_data)
+        mermaid_dependencies = self._generate_dependency_mermaid(builder_data)
+        mermaid_execution = self._generate_execution_path_mermaid(builder_data)
+        
+        # Save raw diagram content to files for debugging
+        def save_debug_file(content, name):
+            debug_path = os.path.join(self.output_dir, f"{name}_raw.md")
+            with open(debug_path, 'w') as f:
+                f.write(content)
+            print(f"Saved raw {name} content to {debug_path}")
+        
+        # Save the original content before processing
+        save_debug_file(mermaid_structure, "structure")
+        save_debug_file(mermaid_dependencies, "dependencies")
+        save_debug_file(mermaid_execution, "execution")
+        
+        # Process each diagram and ensure valid Mermaid syntax
+        structure_content = self._ensure_valid_mermaid_syntax(mermaid_structure, default_type="graph TD")
+        dependencies_content = self._ensure_valid_mermaid_syntax(mermaid_dependencies, default_type="graph LR")
+        execution_content = self._ensure_valid_mermaid_syntax(mermaid_execution, default_type="graph LR")
+        
+        # Generate individual HTML files for each diagram
+        self._generate_individual_diagram_html(structure_content, "code_structure_diagram", "Code Structure Diagram",
+            "This diagram shows the overall structure of the codebase, including functions, classes, and their relationships.")
+        self._generate_individual_diagram_html(dependencies_content, "dependencies_diagram", "Module Dependencies Diagram",
+            "This diagram illustrates the relationships between modules in the codebase, showing how files depend on one another and the overall architecture of the system.")
+        self._generate_individual_diagram_html(execution_content, "execution_paths_diagram", "Execution Paths Diagram",
+            "This diagram shows the major execution paths from entry points, illustrating the flow of execution through different functions and modules.")
+        
+        # Organize functions by file for the custom viewer
+        functions_by_file = {}
+        file_names = {}
+        
+        # Get functions from the builder data
+        all_functions = builder_data.get("functions", [])
+        for func in all_functions:
+            file_path = func.get("file", "Unknown")
+            if file_path not in functions_by_file:
+                functions_by_file[file_path] = []
+                file_names[file_path] = os.path.basename(file_path)
+            functions_by_file[file_path].append(func)
+        
+        # Generate the custom viewer (main entry point)
+        self._generate_custom_viewer_html(builder_data, functions_by_file, file_names)
+        
+        return output_path
+
+    def _generate_custom_viewer_html(self, builder_data: Dict[str, Any], functions_by_file: Dict[str, List[Dict[str, Any]]], file_names: Dict[str, str]) -> str:
+        """
+        Generate a custom main viewer HTML file that links to all individual diagram HTML files.
+
+        Args:
+            builder_data: Data from the RelationshipBuilder's get_summary method
+            functions_by_file: Dictionary mapping file paths to lists of function dictionaries
+            file_names: Dictionary mapping file paths to base file names
+
+        Returns:
+            Path to the generated custom viewer HTML file
+        """
+        # Validate input data
+        if not isinstance(builder_data, dict):
+            builder_data = {}
+            print("Warning: builder_data is not a dictionary. Using empty dictionary instead.")
+        
+        if not isinstance(functions_by_file, dict):
+            functions_by_file = {}
+            print("Warning: functions_by_file is not a dictionary. Using empty dictionary instead.")
+            
+        if not isinstance(file_names, dict):
+            file_names = {}
+            print("Warning: file_names is not a dictionary. Using empty dictionary instead.")
+            
+        # Ensure required keys exist in builder_data
+        execution_paths = builder_data.get("execution_paths", [])
+        if not isinstance(execution_paths, list):
+            execution_paths = []
+            print("Warning: execution_paths is not a list. Using empty list instead.")
+            
+        dependencies = builder_data.get("dependencies", [])
+        if not isinstance(dependencies, list):
+            dependencies = []
+            print("Warning: dependencies is not a list. Using empty list instead.")
+
+        output_path = os.path.join(self.output_dir, "custom_viewer.html")
+
+        # Get execution paths and dependencies from builder_data
+        execution_paths = builder_data.get("execution_paths", [])
+        dependencies = builder_data.get("dependencies", [])
+
+        # HTML template for the custom viewer
+        html_template = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Flow Custom Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        h2 {
+            margin-top: 40px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        h3 {
+            cursor: pointer;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+            transition: background-color 0.2s;
+        }
+        h3:hover {
+            background-color: #e0e0e0;
+        }
+        h3::before {
+            content: "▶ ";
+            font-size: 10px;
+        }
+        h3.expanded::before {
+            content: "▼ ";
+        }
+        .module-content {
+            display: none;
+            margin-left: 20px;
+            border-left: 2px solid #ddd;
+            padding-left: 15px;
+        }
+        .module-description {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+        .function {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .function-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .function-description {
+            color: #666;
+            font-style: italic;
+        }
+        .entry-point {
+            border-left: 4px solid #5ca75c;
+        }
+        .utility-function {
+            border-left: 4px solid #4d8bc9;
+        }
+        .private-function {
+            border-left: 4px solid #999;
+            border-style: dashed;
+        }
+        .call-path {
+            color: #666;
+            margin: 5px 0;
+            font-size: 14px;
+            padding-left: 20px;
+        }
+        .call-steps {
+            color: #666;
+            margin: 5px 0;
+            font-size: 14px;
+            padding-left: 20px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            position: relative;
+            top: 1px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .legend {
+            display: flex;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+        .search {
+            margin: 20px 0;
+        }
+        .search input {
+            padding: 8px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        .summary-box {
+            background-color: #f8f8f8;
+            border-left: 4px solid #4d8bc9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+        .summary-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .visualize-link {
+            background-color: #4d8bc9;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-left: 20px;
+            font-size: 14px;
+        }
+        .visualize-link:hover {
+            background-color: #3a6d99;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Source Flow Analysis</h1>
+
+        <div class="search">
+            <input type="text" id="searchInput" placeholder="Search for functions, modules, or descriptions...">
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-target="structure">Code Structure</div>
+            <div class="tab" data-target="dependencies">Dependencies</div>
+            <div class="tab" data-target="execution">Execution Paths</div>
+        </div>
+
+        <div id="structure" class="tab-content active">
+            <div class="summary-box">
+                <div class="summary-title">Code Structure Overview</div>
+                <p>This view displays the organization of the codebase by file modules and their contained functions. The project consists of core modules for analyzing, exploring, building relationships, and visualizing code projects. Each module contains specific functions with clearly defined responsibilities, and certain functions are marked as entry points if they serve as main execution points.</p>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d4f1d4; border: 2px solid #5ca75c;"></div>
+                    <span>Entry Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: white; border: 1px solid #999;"></div>
+                    <span>Regular Function</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e6f3ff; border: 1px solid #4d8bc9;"></div>
+                    <span>Special Method</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: white; border: 1px dashed #999;"></div>
+                    <span>Private Helper</span>
+                </div>
+                <a href="./code_structure_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
+            </div>
+
+            <!-- Example function with call path for testing -->
+            <div class="function" style="display: none;">
+                <div class="function-name">Example Function</div>
+                <div class="function-description">This is an example function for testing.</div>
+                <div class="call-path">Calls: example_function</div>
+                <div class="call-steps">Step 1: example_step</div>
+            </div>
+
+            <!-- Example private function for testing -->
+            <div class="function private-function" style="display: none;">
+                <div class="function-name">_example_private_function</div>
+                <div class="function-description">This is an example private function for testing.</div>
+            </div>
+
+            <!-- Example utility function for testing -->
+            <div class="function utility-function" style="display: none;">
+                <div class="function-name">__example_utility__</div>
+                <div class="function-description">This is an example utility function for testing.</div>
+            </div>
+
+            <!-- Example module content for testing -->
+            <h3 data-module="example-module" class="module-header">Example Module</h3>
+            <div class="module-content" id="example-module-content">
+                <div class="module-description">This is an example module for testing.</div>
+            </div>
+"""
+
+        # Add code structure content by file
+        if functions_by_file:
+            for file_path, functions in functions_by_file.items():
+                try:
+                    file_name = file_names.get(file_path, os.path.basename(file_path))
+
+                    # Create module description from the first function's description
+                    module_description = "This module contains various functions for code processing."
+                    for func in functions:
+                        if func.get("name", "").startswith("__init__"):
+                            module_description = func.get("description", module_description)
+                            break
+
+                    html_template += f"""
+            <h3 data-module="{file_name}" class="module-header">{file_name}</h3>
+            <div class="module-content" id="{file_name.replace('.', '-')}-content">
+                <div class="module-description">{module_description}</div>
+"""
+
+                    # Add each function in the file
+                    for func_index, func in enumerate(functions):
+                        try:
+                            name = func.get("name", "Unknown")
+                            description = func.get("description", "No description available.")
+                            is_entry_point = func.get("is_entry_point", False)
+                            is_private = name.startswith("_") and not name.startswith("__")
+                            is_special = name.startswith("__") and name.endswith("__")
+
+                            # Determine function class
+                            function_class = ""
+                            if is_entry_point:
+                                function_class = "entry-point"
+                            elif is_private:
+                                function_class = "private-function"
+                            elif is_special:
+                                function_class = "utility-function"
+
+                            # Find functions this one calls
+                            callees = []
+                            for callee in func.get("calls", []):
+                                callee_name = callee.get("name", "")
+                                if callee_name:
+                                    callees.append(callee_name)
+
+                            call_path_html = ""
+                            if callees:
+                                call_path_html = f'<div class="call-path">Calls: {", ".join(callees)}</div>'
+
+                            html_template += f"""
+                <div class="function {function_class}">
+                    <div class="function-name">{name}</div>
+                    <div class="function-description">{description}</div>
+                    {call_path_html}
+                </div>
+"""
+                        except Exception as e:
+                            print(f"Error processing function {func_index} in file {file_path}: {str(e)}")
+                            # Add a placeholder for the failed function
+                            html_template += f"""
+                <div class="function">
+                    <div class="function-name">Error processing function</div>
+                    <div class="function-description">An error occurred while processing this function: {str(e)}</div>
+                </div>
+"""
+
+                    html_template += """
+            </div>
+"""
+                except Exception as e:
+                    print(f"Error processing file {file_path}: {str(e)}")
+                    # Add a placeholder for the failed file
+                    safe_file_name = os.path.basename(str(file_path))
+                    html_template += f"""
+            <h3 data-module="{safe_file_name}" class="module-header">{safe_file_name}</h3>
+            <div class="module-content" id="{safe_file_name.replace('.', '-')}-content">
+                <div class="module-description">An error occurred while processing this file: {str(e)}</div>
+            </div>
+"""
+
+        # Add dependencies tab
+        html_template += """
+        </div>
+
+        <div id="dependencies" class="tab-content">
+            <div class="summary-box">
+                <div class="summary-title">Module Dependencies Overview</div>
+                <p>This view shows the relationships between different files in the codebase, indicating which files depend on others through imports. The arrows indicate the direction of dependencies, pointing from the module that imports to the module being imported.</p>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="border: 1px solid #999; position: relative;">
+                        <div style="position: absolute; top: 50%; left: 100%; width: 10px; height: 1px; background: #999;"></div>
+                    </div>
+                    <span>Module imports</span>
+                </div>
+                <a href="./dependencies_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
+            </div>
+"""
+
+        # Add dependencies content
+        for dep_index, dep in enumerate(dependencies):
+            try:
+                source = dep.get("source", "Unknown")
+                target = dep.get("target", "Unknown")
+                source_name = os.path.basename(source)
+                target_name = os.path.basename(target)
+
+                html_template += f"""
+            <div class="function">
+                <div class="function-name">{source_name}</div>
+                <div class="call-path">Imports: {target_name}</div>
+            </div>
+"""
+            except Exception as e:
+                print(f"Error processing dependency {dep_index}: {str(e)}")
+                # Add a placeholder for the failed dependency
+                html_template += f"""
+            <div class="function">
+                <div class="function-name">Error processing dependency</div>
+                <div class="function-description">An error occurred while processing this dependency: {str(e)}</div>
+            </div>
+"""
+
+        # Add execution paths tab
+        html_template += """
+        </div>
+
+        <div id="execution" class="tab-content">
+            <div class="summary-box">
+                <div class="summary-title">Execution Paths Overview</div>
+                <p>This view shows the main execution flows through the codebase, starting from entry points and following through the functions they call. It helps understand the typical runtime behavior of the application and how components interact.</p>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d4f1d4; border: 2px solid #5ca75c;"></div>
+                    <span>Entry Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="border: 1px solid #999; position: relative;">
+                        <div style="position: absolute; top: 50%; left: 100%; width: 10px; height: 1px; background: #999;"></div>
+                    </div>
+                    <span>Execution Flow</span>
+                </div>
+                <a href="./execution_paths_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
+            </div>
+"""
+
+        # Add execution paths content
+        for i, path in enumerate(execution_paths):
+            try:
+                if isinstance(path, list):
+                    # Handle the case where path is a list
+                    if path and len(path) > 0:
+                        first_step = path[0]
+                        if isinstance(first_step, dict):
+                            entry_name = first_step.get("function_name", "Unknown")
+                            entry_file = first_step.get("file", "")
+                        else:
+                            entry_name = str(first_step)
+                            entry_file = ""
+                    else:
+                        entry_name = "Unknown"
+                        entry_file = ""
+                    # Always define steps for the list case
+                    steps = path if path and all(isinstance(step, dict) for step in path) else []
+                else:
+                    # Handle the case where path is a dictionary
+                    entry_point = path.get("entry_point", {})
+                    entry_name = entry_point.get("name", "Unknown")
+                    entry_file = entry_point.get("file", "")
+                    steps = path.get("steps", [])
+
+                file_name = os.path.basename(entry_file) if entry_file else "Unknown"
+
+                html_template += f"""
+                <div class="function entry-point">
+                    <div class="function-name">Path {i+1}: {entry_name} ({file_name})</div>
+                    <div class="function-description">Execution path starting from {entry_name}</div>
+"""
+
+                for j, step in enumerate(steps):
+                    if isinstance(step, dict):
+                        func_name = step.get("function_name", step.get("name", "Unknown"))
+                        func_file = step.get("file", "")
+                        description = step.get("description", "")
+                    else:
+                        func_name = str(step)
+                        func_file = ""
+                        description = ""
+
+                    file_name = os.path.basename(func_file) if func_file else "Unknown"
+
+                    if j > 0:  # Skip first step as it's the entry point already shown
+                        html_template += f"""
+                    <div class="call-steps">Step {j}: {func_name} ({file_name}) {description}</div>
+"""
+
+                html_template += """
+                </div>
+"""
+            except Exception as e:
+                print(f"Error processing execution path {i}: {str(e)}")
+                # Add a placeholder for the failed path
+                html_template += f"""
+                <div class="function entry-point">
+                    <div class="function-name">Path {i+1}: Error processing path</div>
+                    <div class="function-description">An error occurred while processing this execution path: {str(e)}</div>
+                </div>
+"""
+
+        # Complete the HTML template
+        html_template += """
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                const target = tab.getAttribute('data-target');
+                document.getElementById(target).classList.add('active');
+            });
+        });
+        
+        // Module expansion
+        document.querySelectorAll('h3[data-module]').forEach(header => {
+            header.addEventListener('click', () => {
+                header.classList.toggle('expanded');
+                const moduleId = header.getAttribute('data-module').replace('.', '-') + '-content';
+                const content = document.getElementById(moduleId);
+                if (content) {
+                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                }
+            });
+        });
+        
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            
+            // Reset highlights
+            document.querySelectorAll('.highlight').forEach(el => {
+                el.outerHTML = el.innerHTML;
+            });
+            
+            if (searchTerm.length < 2) return;
+            
+            // Search in function names, descriptions, and module names
+            document.querySelectorAll('.function-name, .function-description, h3[data-module]').forEach(el => {
+                const text = el.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    // Highlight the element
+                    const parent = el.closest('.function') || el;
+                    parent.scrollIntoView();
+                    
+                    // If it's inside a collapsed module, expand it
+                    if (el.closest('.module-content')) {
+                        const moduleId = el.closest('.module-content').id;
+                        const header = document.querySelector(`h3[data-module="${moduleId.replace('-content', '')}"]`);
+                        if (header && !header.classList.contains('expanded')) {
+                            header.click();
+                        }
+                    }
+                    
+                    // Highlight the matching text
+                    el.innerHTML = el.innerHTML.replace(
+                        new RegExp(searchTerm, 'gi'), 
+                        match => '<span class="highlight">' + match + '</span>'
+                    );
+                }
+            });
+        });
+    </script>
+</body>
+</html>"""
+
+        # Save the HTML file
+        try:
+            # Ensure output directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            with open(output_path, 'w') as f:
+                f.write(html_template)
+            print(f"Successfully generated custom viewer HTML at: {output_path}")
+        except IOError as e:
+            print(f"Error saving custom viewer HTML: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error generating custom viewer HTML: {str(e)}")
+            return None
+
         return output_path
 
 class Visualizer:
@@ -1461,10 +1672,7 @@ class Visualizer:
             border-bottom: 1px solid #eee;
         }
         .diagram-container {
-            background-color: white;
-            padding: 15px;
-            border-radius: 5px;
-            margin-top: 15px;
+            margin-top: 20px;
             overflow: auto;
         }
         .error-info {
@@ -1511,35 +1719,92 @@ EXECUTION_CONTENT_PLACEHOLDER
     
     <script>
         // Configure Mermaid with more detailed settings
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: 'default',
-            securityLevel: 'loose',
-            flowchart: {
-                useMaxWidth: false,
-                htmlLabels: true
-            },
-            logLevel: 'debug'
-        });
-        
-        // Add event listener to catch rendering errors
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log("Document loaded, checking diagrams...");
+        function configureMermaidByDiagramType() {{
+            const diagramText = document.querySelector('.mermaid').textContent;
+            const config = {{
+                startOnLoad: true,
+                theme: 'default',
+                securityLevel: 'loose',
+                flowchart: {{
+                    useMaxWidth: false,
+                    htmlLabels: true,
+                    curve: 'basis',
+                    rankSpacing: 200,       // Dramatically increased spacing between ranks for better enclosure
+                    nodeSpacing: 150,       // Dramatically increased spacing between nodes
+                    padding: 80,            // Significantly increased padding around subgraphs
+                    ranker: 'longest-path',  // More space-efficient layout for complex diagrams
+                    diagramPadding: 30,     // Add padding around the entire diagram
+                    labelPosition: 'center', // Try to force center positioning of labels
+                    defaultRenderer: 'dagre-wrapper', // Ensure consistent rendering
+                }},
+                themeVariables: {{
+                    fontSize: '14px',
+                    fontFamily: 'Arial, sans-serif',
+                    primaryColor: '#e6f3ff',
+                    primaryTextColor: '#333',
+                    primaryBorderColor: '#4d8bc9',
+                    lineColor: '#666',
+                    secondaryColor: '#f9f9f9',
+                    tertiaryColor: '#f5f5f5'
+                }}
+            }};
             
-            // Listen for mermaid errors and display them
-            window.addEventListener('error', function(e) {
-                if (e.error && e.error.toString().includes('mermaid')) {
-                    console.error('Mermaid error:', e.error);
-                    
-                    // Show errors in the appropriate container
-                    const errorElements = document.querySelectorAll('.error-info');
-                    errorElements.forEach(el => {
-                        el.textContent = 'Diagram rendering error: ' + e.error.toString();
-                        el.style.display = 'block';
-                    });
-                }
-            });
-        });
+            // Detect if diagram has many subgraphs (complex structure)
+            const subgraphCount = (diagramText.match(/subgraph/g) || []).length;
+            
+            // Detect if diagram has many nodes
+            const nodeCount = (diagramText.match(/\\[.*?\\]/g) || []).length;
+            
+            // Adjust configuration based on complexity
+            if (subgraphCount > 5 || nodeCount > 15) {{
+                // For complex diagrams with many nodes or subgraphs
+                config.flowchart.nodeSpacing = 100;
+                config.flowchart.rankSpacing = 150;
+                config.flowchart.padding = 80;
+            }} else {{
+                // For simpler diagrams
+                config.flowchart.nodeSpacing = 150;
+                config.flowchart.rankSpacing = 200;
+                config.flowchart.padding = 100;
+            }}
+            
+            return config;
+        }}
+        
+        // Initialize Mermaid with the configuration
+        mermaid.initialize(configureMermaidByDiagramType());
+        
+        // Zoom functionality
+        let zoomLevel = 1.5;
+        const mermaidDiv = document.getElementById('mermaid-diagram');
+        const zoomLevelDisplay = document.getElementById('zoom-level');
+        
+        // Apply initial zoom
+        updateZoom();
+        
+        // Update zoom level display and apply zoom
+        function updateZoom() {{
+            zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
+            mermaidDiv.style.transform = `scale(${{zoomLevel}})`;
+        }}
+        
+        // Zoom in
+        document.getElementById('zoom-in').addEventListener('click', () => {{
+            zoomLevel = Math.min(zoomLevel + 0.1, 3);
+            updateZoom();
+        }});
+        
+        // Zoom out
+        document.getElementById('zoom-out').addEventListener('click', () => {{
+            zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
+            updateZoom();
+        }});
+        
+        // Reset zoom
+        document.getElementById('zoom-reset').addEventListener('click', () => {{
+            zoomLevel = 1.5;
+            updateZoom();
+        }});
     </script>
 </body>
 </html>"""
@@ -1760,11 +2025,6 @@ EXECUTION_CONTENT_PLACEHOLDER
         
         # If not, add the default type
         if not has_valid_start:
-            diagram_content = f"{default_type}\n{diagram_content}"
-        
-        # Fix common syntax errors
-        # 1. Ensure nodes have valid names (alphanumeric or enclosed in quotes)
-        # 2. Add missing edge types (-- or -->)
-        # This is a basic implementation and may need enhancement for more complex issues
-        
+            diagram_content = f"{default_type}\n    {diagram_content}"
+            
         return diagram_content 
