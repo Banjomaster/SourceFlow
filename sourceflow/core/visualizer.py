@@ -382,7 +382,7 @@ class VisualizationGenerator:
         print(f"Generating Mermaid diagram with {len(function_details)} functions, {len(file_functions)} files, {len(entry_points)} entry points")
         
         # Use LR (left to right) layout for better readability with many nodes
-        mermaid = "```mermaid\ngraph LR\n"
+        mermaid = "graph LR\n"
         
         # Add Mermaid directives for improved layout
         mermaid += "  %% Configuration for better readability\n"
@@ -398,7 +398,6 @@ class VisualizationGenerator:
         # If no data, create a simple diagram showing the issue
         if not function_details and not file_functions:
             mermaid += "  noData[\"No function data available\"]\n"
-            mermaid += "```"
             return mermaid
             
         # Group functions by file
@@ -465,21 +464,24 @@ class VisualizationGenerator:
         mermaid += "    entry -->|calls| regular\n"
         mermaid += "  end\n"
         
-        mermaid += "```"
+        # Add class assignments for entry points
+        for entry_point in entry_points:
+            safe_name = self._sanitize_name(entry_point)
+            mermaid += f"  {safe_name}:::entryPoint\n"
+        
         return mermaid
     
     def _generate_dependency_mermaid(self, builder_data: Dict[str, Any]) -> str:
-        """Generate Mermaid syntax for file dependency diagram."""
-        file_dependencies = builder_data.get('file_dependencies', {})
+        """Generate Mermaid syntax for module dependencies diagram."""
         file_summaries = builder_data.get('file_summaries', {})
+        file_dependencies = builder_data.get('file_dependencies', {})
         
-        # Print diagnostic info
         print(f"Generating dependency Mermaid diagram with {len(file_summaries)} files, {len(file_dependencies)} dependencies")
         
-        # Use LR layout for better readability
-        mermaid = "```mermaid\ngraph LR;\n"
+        # Create Mermaid diagram for module dependencies
+        mermaid = "graph LR;\n"
         
-        # Add Mermaid directives for improved layout
+        # Add styling
         mermaid += "  %% Configuration for better readability\n"
         mermaid += "  linkStyle default stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5;\n"
         
@@ -492,7 +494,6 @@ class VisualizationGenerator:
         # If no data, create a simple diagram showing the issue
         if not file_summaries:
             mermaid += "  noData[\"No file dependency data available\"];\n"
-            mermaid += "```"
             return mermaid
             
         # Add nodes for each file with wrapped module descriptions
@@ -533,20 +534,17 @@ class VisualizationGenerator:
         mermaid += "    mainLegend -.-|\"imports\"| moduleLegend;\n"
         mermaid += "  end\n"
         
-        mermaid += "```"
         return mermaid
     
     def _generate_execution_path_mermaid(self, builder_data: Dict[str, Any]) -> str:
         """Generate Mermaid syntax for execution path diagram."""
+        execution_paths = builder_data.get('execution_paths', [])
         function_details = builder_data.get('function_details', {})
-        execution_paths = builder_data.get('entry_point_paths', [])  # Use entry_point_paths from builder data
         
-        # Print diagnostic info
-        total_funcs = sum(len(path) for path in execution_paths)
         print(f"Generating execution path Mermaid diagram with {len(execution_paths)} paths, {len(function_details)} functions")
         
-        # Use LR layout for better readability
-        mermaid = "```mermaid\ngraph LR;\n"
+        # Start creating Mermaid diagram with left-to-right orientation for better layout
+        mermaid = "graph LR\n"
         
         # Add Mermaid directives for improved layout
         mermaid += "  %% Configuration for better readability\n"
@@ -555,7 +553,6 @@ class VisualizationGenerator:
         # If no data, create a simple diagram showing the issue
         if not execution_paths:
             mermaid += "  noData[\"No execution path data available\"];\n"
-            mermaid += "```"
             return mermaid
         
         # Define styling classes
@@ -601,11 +598,10 @@ class VisualizationGenerator:
         mermaid += "  subgraph Legend[\"Legend\"]\n"
         mermaid += "    style Legend fill:#f9f9f9,stroke:#999,color:black;\n"
         mermaid += "    entryLegend[\"Entry Point\"]:::entryPoint;\n"
-        mermaid += "    funcLegend[\"Function Call\"]:::pathFunc;\n"
-        mermaid += "    entryLegend ===>|\"execution step\"| funcLegend;\n"
+        mermaid += "    funcLegend[\"Function\"]:::pathFunc;\n"
+        mermaid += "    entryLegend ===>|\"step 1\"| funcLegend;\n"
         mermaid += "  end\n"
         
-        mermaid += "```"
         return mermaid
     
     def _wrap_text(self, text: str, width: int) -> str:
@@ -711,6 +707,14 @@ class VisualizationGenerator:
         Returns:
             str: The path to the generated HTML file
         """
+        # Clean diagram_content by removing any existing mermaid backtick fences
+        # This prevents duplicate graph declarations
+        cleaned_content = diagram_content
+        if diagram_content.startswith("```mermaid"):
+            # Extract only the actual Mermaid syntax without the backtick fences
+            cleaned_content = re.sub(r'^```mermaid\s*', '', diagram_content)
+            cleaned_content = re.sub(r'```\s*$', '', cleaned_content)
+        
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -845,7 +849,7 @@ class VisualizationGenerator:
 
     <div class="diagram-container">
         <div id="mermaid-diagram" class="mermaid">
-{diagram_content}
+{cleaned_content}
         </div>
     </div>
 
