@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Flow - Execution Paths Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .title {
+            font-size: 1.2em;
+            margin: 0;
+        }
+        .back-button {
+            background-color: #4d8bc9;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .back-button:hover {
+            background-color: #3a6d99;
+        }
+        .controls-container {
+            padding: 10px 20px;
+            background-color: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        .info-box {
+            background-color: #e6f3ff;
+            border-left: 4px solid #4d8bc9;
+            padding: 10px 15px;
+            margin-right: 20px;
+            border-radius: 0 4px 4px 0;
+            flex: 1;
+        }
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+        .zoom-button {
+            background-color: #4d8bc9;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .diagram-container {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+            margin: 0;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+        }
+        #mermaid-diagram {
+            transform-origin: center top;
+            padding: 0;
+            min-width: 100px;
+            max-width: 95%;
+            margin: 20px auto;
+        }
+        /* Very minimal Mermaid styling */
+        :root {
+            --mermaid-font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="title">Execution Paths Diagram</h1>
+        <a href="./custom_viewer.html" class="back-button">Back to Overview</a>
+    </div>
+    
+    <div class="controls-container">
+        <div class="info-box">
+            <div>This diagram shows the major execution paths from entry points, illustrating the flow of execution through different functions and modules.</div>
+        </div>
+        
+        <div class="zoom-controls">
+            <button class="zoom-button" id="zoom-out">-</button>
+            <span id="zoom-level">150%</span>
+            <button class="zoom-button" id="zoom-in">+</button>
+            <button class="zoom-button" id="zoom-reset">R</button>
+        </div>
+    </div>
+    
+    <div class="diagram-container">
+        <div id="mermaid-diagram" class="mermaid">
+graph LR;
+  %% Configuration for better readability
+  linkStyle default stroke:#666,stroke-width:2px,stroke-dasharray:3 2;
+  classDef default fill:#f9f9f9,stroke:#999,color:black;
+  classDef entryPoint fill:#d4f1d4,stroke:#5ca75c,stroke-width:2px,color:black;
+  classDef pathFunc fill:#f5f5f5,stroke:#666666,color:black;
+  classDef pathHeader fill:#eaeaea,stroke:#555,color:black,text-align:center;
+
+  subgraph Path_0["<b>Execution Path 1</b>"]
+    style Path_0 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    VisualizationGenerator_generate_execution_path_diagram_0["<b>VisualizationGenerator.generate_execution_path_diagram</b><br><i>Generates execution path<br>diagrams from entry points in<br>the analysis data.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_1["<b>Execution Path 2</b>"]
+    style Path_1 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    analyze_file_1["<b>analyze_file</b><br><i>Analyzes a single code file.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_2["<b>Execution Path 3</b>"]
+    style Path_2 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    add_file_analysis_2["<b>add_file_analysis</b><br><i>Add a file's analysis results<br>to the relationship builder.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_3["<b>Execution Path 4</b>"]
+    style Path_3 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    VisualizationGenerator_export_data_3["<b>VisualizationGenerator.export_data</b><br><i>Exports analysis data to a<br>JSON file.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_4["<b>Execution Path 5</b>"]
+    style Path_4 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    get_file_stats_4["<b>get_file_stats</b><br><i>Generates statistics about the<br>identified code files.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_5["<b>Execution Path 6</b>"]
+    style Path_5 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    get_summary_5["<b>get_summary</b><br><i>Get a summary of the analysis<br>results.</i>"]:::entryPoint;
+    get_summary_5 -->|"step 1"| get_entry_point_paths_5;
+    get_entry_point_paths_5["<b>get_entry_point_paths</b><br><i>Get the major execution paths<br>starting from entry points.</i>"]:::pathFunc;
+    get_entry_point_paths_5 -->|"step 2"| n__trace_path_from_5;
+    n__trace_path_from_5["<b>_trace_path_from</b><br><i>Trace a path starting from a<br>specific function.</i>"]:::pathFunc;
+    n__trace_path_from_5 -->|"step 3"| get_function_callees_5;
+    get_function_callees_5["<b>get_function_callees</b><br><i>Get all functions called by a<br>specific function.</i>"]:::pathFunc;
+  end
+  
+  subgraph Path_6["<b>Execution Path 7</b>"]
+    style Path_6 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    VisualizationGenerator___init___6["<b>VisualizationGenerator.__init__</b><br><i>Initializes the visualization<br>generator with output<br>directory and formats.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_7["<b>Execution Path 8</b>"]
+    style Path_7 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    VisualizationGenerator_generate_dependency_diagram_7["<b>VisualizationGenerator.generate_dependency_diagram</b><br><i>Generates module/file<br>dependency diagrams using<br>analysis data.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_8["<b>Execution Path 9</b>"]
+    style Path_8 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    VisualizationGenerator_generate_function_diagram_8["<b>VisualizationGenerator.generate_function_diagram</b><br><i>Generates function call<br>diagrams based on analysis<br>data.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_9["<b>Execution Path 10</b>"]
+    style Path_9 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    explore_9["<b>explore</b><br><i>Recursively explores the<br>directory structure starting<br>from root_dir.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_10["<b>Execution Path 11</b>"]
+    style Path_10 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    n___init___10["<b>__init__</b><br><i>Initializes the<br>DirectoryExplorer with<br>configurable settings.</i>"]:::entryPoint;
+  end
+  
+  subgraph Path_11["<b>Execution Path 12</b>"]
+    style Path_11 fill:#eaeaea,stroke:#555,color:black,stroke-width:2px;
+    main_11["<b>main</b><br><i>Main entry point for the CLI<br>application.</i>"]:::entryPoint;
+    main_11 -->|"step 1"| analyze_project_11;
+    analyze_project_11["<b>analyze_project</b><br><i>Analyze a code project and<br>generate visualizations.</i>"]:::pathFunc;
+  end
+  
+  subgraph Legend["Legend"]
+    style Legend fill:#f9f9f9,stroke:#999,color:black;
+    entryLegend["Entry Point"]:::entryPoint;
+    funcLegend["Function Call"]:::pathFunc;
+    entryLegend -->|"execution step"| funcLegend;
+  end
+        </div>
+    </div>
+    
+    <script>
+        // Configure Mermaid based on diagram type for optimal rendering
+        function configureMermaidByDiagramType() {
+            const diagramText = document.querySelector('.mermaid').textContent;
+            const config = {
+                startOnLoad: true,
+                theme: 'default',
+                securityLevel: 'loose',
+                flowchart: {
+                    useMaxWidth: false,
+                    htmlLabels: true,
+                    curve: 'basis',
+                    rankSpacing: 200,       // Dramatically increased spacing between ranks for better enclosure
+                    nodeSpacing: 150,       // Dramatically increased spacing between nodes
+                    padding: 80,            // Significantly increased padding around subgraphs
+                    ranker: 'longest-path'  // More space-efficient layout for complex diagrams
+                },
+                themeVariables: {
+                    fontSize: '14px',
+                    fontFamily: 'Arial, sans-serif'
+                }
+            };
+            
+            // Detect if diagram has many subgraphs (complex structure)
+            const subgraphCount = (diagramText.match(/subgraph/g) || []).length;
+            
+            // Detect if diagram has many nodes
+            const nodeCount = (diagramText.match(/\[.*?\]/g) || []).length;
+            
+            // Adjust configuration based on complexity
+            if (subgraphCount > 5 || nodeCount > 15) {
+                // For complex diagrams with many nodes or subgraphs
+                config.flowchart.nodeSpacing = 100;
+                config.flowchart.rankSpacing = 150;
+                config.flowchart.padding = 80;
+            } else {
+                // For simpler diagrams
+                config.flowchart.nodeSpacing = 150;
+                config.flowchart.rankSpacing = 200;
+                config.flowchart.padding = 100;
+            }
+            
+            return config;
+        }
+        
+        // Initialize Mermaid with the configuration
+        mermaid.initialize(configureMermaidByDiagramType());
+        
+        // Zoom functionality with smart positioning
+        let zoomLevel = 2.0; // Significantly higher starting zoom level
+        const zoomStep = 0.2;
+        let isDragging = false;
+        let lastX, lastY;
+        
+        function updateZoom() {
+            const zoomLevelEl = document.getElementById('zoom-level');
+            if (zoomLevelEl) {
+                zoomLevelEl.textContent = `${Math.round(zoomLevel * 100)}%`;
+            }
+            
+            const diagram = document.getElementById('mermaid-diagram');
+            if (diagram) {
+                diagram.style.transform = `scale(${zoomLevel})`;
+                diagram.style.transformOrigin = 'center top';
+            }
+        }
+        
+        // Initial diagram setup and rendering
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize mermaid rendering with robust error handling
+            try {
+                mermaid.init(undefined, '.mermaid');
+            } catch (e) {
+                console.error("Mermaid initialization error:", e);
+            }
+            
+            // Set initial zoom
+            updateZoom();
+            
+            // Add event listeners for zoom controls with explicit null checks
+            const zoomInButton = document.getElementById('zoom-in');
+            if (zoomInButton) {
+                zoomInButton.addEventListener('click', function() {
+                    zoomLevel += zoomStep;
+                    updateZoom();
+                });
+            }
+            
+            const zoomOutButton = document.getElementById('zoom-out');
+            if (zoomOutButton) {
+                zoomOutButton.addEventListener('click', function() {
+                    if (zoomLevel > zoomStep) {
+                        zoomLevel -= zoomStep;
+                        updateZoom();
+                    }
+                });
+            }
+            
+            const zoomResetButton = document.getElementById('zoom-reset');
+            if (zoomResetButton) {
+                zoomResetButton.addEventListener('click', function() {
+                    // Reset zoom level based on diagram complexity
+                    const diagram = document.getElementById('mermaid-diagram');
+                    const container = document.querySelector('.diagram-container');
+                    
+                    if (diagram && container) {
+                        // Count subgraphs and nodes for complexity assessment
+                        const mermaidEl = document.querySelector('.mermaid');
+                        if (mermaidEl) {
+                            const diagramText = mermaidEl.textContent;
+                            const subgraphCount = (diagramText.match(/subgraph/g) || []).length;
+                            const nodeCount = (diagramText.match(/\[.*?\]/g) || []).length;
+                            
+                            // Auto-scale based on diagram width and content complexity
+                            const diagramWidth = diagram.scrollWidth;
+                            const containerWidth = container.clientWidth;
+                            
+                            if (nodeCount > 30 || subgraphCount > 8) {
+                                // Very complex diagrams - start with much higher zoom
+                                zoomLevel = Math.min(4.0, Math.max(3.0, containerWidth / diagramWidth * 4.0));
+                            } else if (nodeCount > 15 || subgraphCount > 4) {
+                                // Moderately complex diagrams
+                                zoomLevel = Math.min(3.5, Math.max(2.5, containerWidth / diagramWidth * 3.5));
+                            } else {
+                                // Simpler diagrams
+                                zoomLevel = Math.min(3.0, Math.max(2.0, containerWidth / diagramWidth * 3.0));
+                            }
+                            
+                            // Ensure minimum zoom level of 200%
+                            zoomLevel = Math.max(2.0, zoomLevel);
+                        } else {
+                            // Default if we can't get diagram content
+                            zoomLevel = 2.0;
+                        }
+                    } else {
+                        // Default if missing elements
+                        zoomLevel = 2.0;
+                    }
+                    updateZoom();
+                });
+            }
+            
+            // Add pan functionality for large diagrams
+            const diagramContainer = document.querySelector('.diagram-container');
+            if (diagramContainer) {
+                diagramContainer.addEventListener('mousedown', function(e) {
+                    if (e.target === diagramContainer || e.target.closest('#mermaid-diagram')) {
+                        isDragging = true;
+                        lastX = e.clientX;
+                        lastY = e.clientY;
+                        diagramContainer.style.cursor = 'grabbing';
+                    }
+                });
+            }
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                if (diagramContainer) {
+                    diagramContainer.scrollLeft += lastX - e.clientX;
+                    diagramContainer.scrollTop += lastY - e.clientY;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                }
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+                if (diagramContainer) {
+                    diagramContainer.style.cursor = 'auto';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

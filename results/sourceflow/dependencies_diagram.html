@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Flow - Module Dependencies Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .title {
+            font-size: 1.2em;
+            margin: 0;
+        }
+        .back-button {
+            background-color: #4d8bc9;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .back-button:hover {
+            background-color: #3a6d99;
+        }
+        .controls-container {
+            padding: 10px 20px;
+            background-color: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        .info-box {
+            background-color: #e6f3ff;
+            border-left: 4px solid #4d8bc9;
+            padding: 10px 15px;
+            margin-right: 20px;
+            border-radius: 0 4px 4px 0;
+            flex: 1;
+        }
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+        .zoom-button {
+            background-color: #4d8bc9;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .diagram-container {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+            margin: 0;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+        }
+        #mermaid-diagram {
+            transform-origin: center top;
+            padding: 0;
+            min-width: 100px;
+            max-width: 95%;
+            margin: 20px auto;
+        }
+        /* Very minimal Mermaid styling */
+        :root {
+            --mermaid-font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="title">Module Dependencies Diagram</h1>
+        <a href="./custom_viewer.html" class="back-button">Back to Overview</a>
+    </div>
+    
+    <div class="controls-container">
+        <div class="info-box">
+            <div>This diagram illustrates the relationships between modules in the codebase, showing how files depend on one another and the overall architecture of the system.</div>
+        </div>
+        
+        <div class="zoom-controls">
+            <button class="zoom-button" id="zoom-out">-</button>
+            <span id="zoom-level">150%</span>
+            <button class="zoom-button" id="zoom-in">+</button>
+            <button class="zoom-button" id="zoom-reset">R</button>
+        </div>
+    </div>
+    
+    <div class="diagram-container">
+        <div id="mermaid-diagram" class="mermaid">
+graph LR;
+  %% Configuration for better readability
+  linkStyle default stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5;
+  classDef default fill:#f9f9f9,stroke:#999,color:black;
+  classDef pythonModule fill:#e6f3ff,stroke:#4d8bc9,color:black;
+  classDef configFile fill:#fff7e6,stroke:#d9b38c,color:black;
+  classDef mainFile fill:#d4f1d4,stroke:#5ca75c,color:black;
+  
+  run_analyzer["<b>run_analyzer.py</b><br><i>This script serves as the<br>entry point for running the<br>Code Project Analyzer from the<br>command line.</i>"]:::mainFile;
+  
+  sourceflow_init["<b>__init__.py</b><br><i>An AI-powered application that<br>analyzes code projects,<br>extracts information, and<br>generates visual<br>representations of their<br>structure and relationships.</i>"]:::pythonModule;
+  
+  main_py["<b>main.py</b><br><i>This module serves as the main<br>entry point for the Code<br>Project Analyzer application.</i>"]:::mainFile;
+  
+  analyzer_py["<b>analyzer.py</b><br><i>A module for analyzing code<br>files using AI.</i>"]:::pythonModule;
+  
+  core_init["<b>core/__init__.py</b><br><i>Core modules for the Code<br>Project Analyzer.</i>"]:::pythonModule;
+  
+  builder_py["<b>builder.py</b><br><i>This module is responsible for<br>aggregating analysis results<br>across files, building<br>cross-file dependency and call<br>graphs, and identifying entry<br>points and major execution<br>paths.</i>"]:::pythonModule;
+  
+  explorer_py["<b>explorer.py</b><br><i>This module is responsible for<br>traversing the directory<br>structure of a code project,<br>identifying relevant code<br>files, and filtering out<br>non-code files and irrelevant<br>directories.</i>"]:::pythonModule;
+  
+  visualizer_py["<b>visualizer.py</b><br><i>This module generates visual<br>representations of code<br>structure, dependencies, and<br>execution flows based on<br>analysis results, supporting<br>output formats such as<br>Graphviz and Mermaid.</i>"]:::pythonModule;
+  
+  run_analyzer -.-> main_py;
+  main_py -.-> core_init;
+  main_py -.-> explorer_py;
+  main_py -.-> analyzer_py;
+  main_py -.-> builder_py;
+  main_py -.-> visualizer_py;
+  analyzer_py -.-> builder_py;
+  builder_py -.-> visualizer_py;
+  explorer_py -.-> analyzer_py;
+  
+  subgraph Legend["Legend"]
+    style Legend fill:#f9f9f9,stroke:#999,color:black;
+    mainLegend["Entry Point"]:::mainFile;
+    moduleLegend["Python Module"]:::pythonModule;
+    configLegend["Configuration"]:::configFile;
+    mainLegend -.-|"imports"| moduleLegend;
+  end
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Mermaid with better configurations
+        function configureMermaidByDiagramType() {
+            const mermaidText = document.querySelector('.mermaid').textContent;
+            
+            // Count nodes and subgraphs to determine complexity
+            const nodeCount = (mermaidText.match(/\["/g) || []).length;
+            const subgraphCount = (mermaidText.match(/subgraph/g) || []).length;
+            
+            console.log(`Diagram complexity: ${nodeCount} nodes, ${subgraphCount} subgraphs`);
+            
+            // Adjust settings based on complexity
+            let rankSpacing = 200;
+            let nodeSpacing = 150;
+            let padding = 80;
+            
+            if (nodeCount > 50 || subgraphCount > 10) {
+                // Very complex diagram
+                rankSpacing = 250;
+                nodeSpacing = 180;
+                padding = 100;
+            } else if (nodeCount < 10 && subgraphCount < 3) {
+                // Simple diagram
+                rankSpacing = 150;
+                nodeSpacing = 100;
+                padding = 60;
+            }
+            
+            return {
+                startOnLoad: true,
+                securityLevel: 'loose',
+                flowchart: {
+                    useMaxWidth: false,
+                    htmlLabels: true,
+                    curve: 'basis',
+                    rankSpacing: rankSpacing,
+                    nodeSpacing: nodeSpacing,
+                    padding: padding,
+                    rankDir: 'LR'
+                },
+                themeVariables: {
+                    fontSize: '16px',
+                    primaryColor: '#3370cc',
+                    primaryTextColor: '#fff',
+                    primaryBorderColor: '#2a5ca8',
+                    lineColor: '#666',
+                    secondaryColor: '#6699cc',
+                    tertiaryColor: '#f5f5f5'
+                }
+            };
+        }
+
+        // Initialize Mermaid
+        mermaid.initialize(configureMermaidByDiagramType());
+
+        // Render the diagram after the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize mermaid rendering with robust error handling
+            try {
+                mermaid.init(undefined, '.mermaid');
+            } catch (e) {
+                console.error("Mermaid initialization error:", e);
+            }
+            
+            // Add zoom and pan functionality
+            const diagram = document.getElementById('mermaid-diagram');
+            let scale = 2.0; // Start with higher zoom level
+            let dragEnabled = false;
+            let dragStartX, dragStartY, scrollLeft, scrollTop;
+            
+            function updateZoom() {
+                if (diagram) {
+                    diagram.style.transform = `scale(${scale})`;
+                }
+                const zoomLevelEl = document.getElementById('zoom-level');
+                if (zoomLevelEl) {
+                    zoomLevelEl.textContent = `${Math.round(scale * 100)}%`;
+                }
+            }
+            
+            // Set initial zoom
+            updateZoom();
+            
+            // Add event listeners for zoom controls with explicit null checks
+            const zoomInButton = document.getElementById('zoom-in');
+            if (zoomInButton) {
+                zoomInButton.addEventListener('click', function() {
+                    scale = Math.min(scale + 0.1, 4.0);
+                    updateZoom();
+                });
+            }
+            
+            const zoomOutButton = document.getElementById('zoom-out');
+            if (zoomOutButton) {
+                zoomOutButton.addEventListener('click', function() {
+                    scale = Math.max(scale - 0.1, 0.1);
+                    updateZoom();
+                });
+            }
+            
+            const zoomResetButton = document.getElementById('zoom-reset');
+            if (zoomResetButton) {
+                zoomResetButton.addEventListener('click', function() {
+                    // Dynamically calculate a reasonable zoom based on diagram width
+                    if (diagram) {
+                        const diagramSvg = diagram.querySelector('svg');
+                        if (diagramSvg) {
+                            const svgWidth = diagramSvg.getBoundingClientRect().width;
+                            const containerWidth = diagram.parentElement ? diagram.parentElement.clientWidth : 0;
+                            
+                            if (svgWidth > 0 && containerWidth > 0) {
+                                // Calculate a zoom that makes the diagram fit well
+                                let calculatedScale = containerWidth / svgWidth * 0.9;
+                                
+                                // Adjust based on complexity
+                                const mermaidEl = document.querySelector('.mermaid');
+                                if (mermaidEl) {
+                                    const mermaidText = mermaidEl.textContent;
+                                    const nodeCount = (mermaidText.match(/\["/g) || []).length;
+                                    
+                                    if (nodeCount > 30) {
+                                        calculatedScale = Math.max(calculatedScale, 1.5); // Ensure minimum zoom for complex diagrams
+                                    }
+                                }
+                                
+                                scale = Math.max(Math.min(calculatedScale, 3.0), 0.5);
+                            } else {
+                                scale = 2.0; // Default if we can't calculate
+                            }
+                        } else {
+                            scale = 2.0; // Default
+                        }
+                    } else {
+                        scale = 2.0; // Default
+                    }
+                    updateZoom();
+                });
+            }
+            
+            // Enable dragging (panning) in the diagram container
+            const container = document.querySelector('.diagram-container');
+            
+            if (container) {
+                container.addEventListener('mousedown', function(e) {
+                    if (e.button !== 0) return; // Only left mouse button
+                    dragEnabled = true;
+                    dragStartX = e.pageX;
+                    dragStartY = e.pageY;
+                    scrollLeft = container.scrollLeft;
+                    scrollTop = container.scrollTop;
+                    container.style.cursor = 'grabbing';
+                    e.preventDefault();
+                });
+            }
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!dragEnabled) return;
+                const dx = e.pageX - dragStartX;
+                const dy = e.pageY - dragStartY;
+                if (container) {
+                    container.scrollLeft = scrollLeft - dx;
+                    container.scrollTop = scrollTop - dy;
+                }
+            });
+            
+            document.addEventListener('mouseup', function() {
+                dragEnabled = false;
+                if (container) {
+                    container.style.cursor = 'auto';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
