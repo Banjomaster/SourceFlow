@@ -19,3 +19,6 @@ __all__ = [
     'RelationshipBuilder',
     'VisualizationGenerator'
 ]
+
+# Core components for SourceFlow
+# Contains the analyzer, visualizer, and other core functionality
