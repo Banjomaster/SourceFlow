@@ -84,7 +84,7 @@ class CodeAnalyzer:
             The prompt for the AI agent.
         """
         return f"""
-You are an AI agent specializing in analyzing code. Your task is to examine the following code and extract structured information about it.
+You are an AI agent specializing in code analysis. Your task is to examine the following code and extract clear and accurate structured information about it.
 
 CODE TO ANALYZE:
 ```
@@ -93,8 +93,8 @@ CODE TO ANALYZE:
 
 INSTRUCTIONS:
 Analyze this code and extract the following information:
-1. Functions or classes defined in this code with their descriptions
-2. Inputs (parameters) and outputs (return values) for each function/class
+1. Functions or classes defined in this code with their detailed descriptions
+2. Look for and extract inputs (parameters) and outputs (return values) for each function/class
 3. Function calls made within each function/class
 4. External dependencies (imported modules, libraries, etc.)
 5. Potential entry points (main functions, public APIs)

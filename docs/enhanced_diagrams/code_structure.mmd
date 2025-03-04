@@ -1,0 +1,63 @@
+```mermaid
+graph TD;
+  subgraph main_py["<b>main.py</b><br><i>This module serves as the main<br>entry point for the Code<br>Project Analyzer application.</i>"]
+    main["<b>main</b><br><i>Main entry point for the<br>CLI application.</i>"]:::entryPoint;
+    analyze_project["analyze_project<br><i>Analyze a code project<br>and generate<br>visualizations.</i>"];
+  end
+  subgraph visualizer_py["<b>visualizer.py</b><br><i>This module generates visual<br>representations of code<br>structure, dependencies, and<br>execution flows based on<br>analysis results.</i>"]
+    n___init__["<b>__init__</b><br><i>Initialize the<br>visualization generator.</i>"]:::entryPoint;
+    n__check_graphviz["_check_graphviz<br><i>Check if Graphviz is<br>installed by looking for<br>the 'dot' executable.</i>"];
+    generate_function_diagram["<b>generate_function_diagram</b><br><i>Generate function call<br>diagrams using the data<br>from the relationship<br>builder.</i>"]:::entryPoint;
+    generate_dependency_diagram["<b>generate_dependency_diagram</b><br><i>Generate module/file<br>dependency diagrams using<br>data from the<br>relationship builder.</i>"]:::entryPoint;
+    generate_execution_path_diagram["<b>generate_execution_path_diagram</b><br><i>Generate execution path<br>diagrams from entry<br>points using data from<br>the relationship builder.</i>"]:::entryPoint;
+    n__generate_mermaid["_generate_mermaid<br><i>Generate Mermaid syntax<br>for function call<br>diagram.</i>"];
+    n__generate_dependency_mermaid["_generate_dependency_mermaid<br><i>Generate Mermaid syntax<br>for file dependency<br>diagram.</i>"];
+    n__wrap_text["_wrap_text<br><i>Wrap text to a specified<br>width with HTML line<br>breaks for Mermaid<br>diagrams.</i>"];
+    n__generate_execution_path_mermaid["_generate_execution_path_mermaid<br><i>Generate Mermaid syntax<br>for execution path<br>diagram.</i>"];
+    n__sanitize_name["_sanitize_name<br><i>Convert a function or<br>file name to a valid ID<br>for Graphviz and Mermaid.</i>"];
+    export_data["<b>export_data</b><br><i>Export the analysis data<br>to a JSON file.</i>"]:::entryPoint;
+  end
+  subgraph analyzer_py["<b>analyzer.py</b><br><i>A module for analyzing code<br>files using AI.</i>"]
+    count_tokens["count_tokens<br><i>Counts the number of<br>tokens in the given text.</i>"];
+    n__create_prompt["_create_prompt<br><i>Creates the prompt for<br>the AI agent.</i>"];
+    n__parse_response["_parse_response<br><i>Parses the AI agent's<br>JSON response.</i>"];
+    analyze_file["<b>analyze_file</b><br><i>Analyzes a single code<br>file.</i>"]:::entryPoint;
+    n__analyze_code["_analyze_code<br><i>Sends the code to the AI<br>agent for analysis.</i>"];
+    n__analyze_large_file["_analyze_large_file<br><i>Analyzes a large file by<br>chunking it into smaller<br>pieces.</i>"];
+  end
+  subgraph builder_py["<b>builder.py</b><br><i>This module is responsible for<br>aggregating analysis results<br>across files, building<br>cross-file dependency and call<br>graphs, and identifying entry<br>points and major execution<br>paths.</i>"]
+    add_file_analysis["<b>add_file_analysis</b><br><i>Add a file's analysis<br>results to the<br>relationship builder.</i>"]:::entryPoint;
+    get_function_details["get_function_details<br><i>Get details for a<br>specific function.</i>"];
+    get_functions_by_file["get_functions_by_file<br><i>Get all functions defined<br>in a specific file.</i>"];
+    get_function_callers["get_function_callers<br><i>Get all functions that<br>call a specific function.</i>"];
+    get_function_callees["get_function_callees<br><i>Get all functions called<br>by a specific function.</i>"];
+    get_entry_point_paths["get_entry_point_paths<br><i>Get the major execution<br>paths starting from entry<br>points.</i>"];
+    n__trace_path_from["_trace_path_from<br><i>Trace a path starting<br>from a specific function.</i>"];
+    get_summary["<b>get_summary</b><br><i>Get a summary of the<br>analysis results.</i>"]:::entryPoint;
+  end
+  subgraph explorer_py["<b>explorer.py</b><br><i>This module is responsible for<br>traversing the directory<br>structure of a code project,<br>identifying relevant code<br>files, and filtering out<br>non-code files and irrelevant<br>directories.</i>"]
+    explore["<b>explore</b><br><i>Recursively explore the<br>directory structure<br>starting from root_dir.</i>"]:::entryPoint;
+    get_file_stats["<b>get_file_stats</b><br><i>Generate statistics about<br>the identified code<br>files.</i>"]:::entryPoint;
+  end
+  main -->|"calls"| analyze_project;
+  n___init__ -->|"calls"| n__check_graphviz;
+  get_entry_point_paths -->|"calls"| n__trace_path_from;
+  n__trace_path_from -->|"calls"| get_function_callees;
+  n__trace_path_from -->|"calls"| n__trace_path_from;
+  get_summary -->|"calls"| get_entry_point_paths;
+  generate_function_diagram -->|"calls"| n__generate_mermaid;
+  generate_dependency_diagram -->|"calls"| n__generate_dependency_mermaid;
+  generate_execution_path_diagram -->|"calls"| n__generate_execution_path_mermaid;
+  n__generate_mermaid -->|"calls"| n__wrap_text;
+  n__generate_mermaid -->|"calls"| n__sanitize_name;
+  n__generate_dependency_mermaid -->|"calls"| n__wrap_text;
+  n__generate_dependency_mermaid -->|"calls"| n__sanitize_name;
+  n__generate_execution_path_mermaid -->|"calls"| n__wrap_text;
+  n__generate_execution_path_mermaid -->|"calls"| n__sanitize_name;
+  classDef entryPoint fill:#d9ead3,stroke:#82b366,stroke-width:2px;
+  subgraph Legend["Legend"]
+    entry["Entry Point"]:::entryPoint;
+    function["Regular Function"];
+    entry -->|"calls"| function;
+  end
+```

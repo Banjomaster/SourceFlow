@@ -101,20 +101,27 @@ def analyze_project(
     print("\nGenerating visualizations...")
     output_files = {}
     
-    # Function call diagram
-    print("Creating function call diagram...")
-    function_files = visualizer.generate_function_diagram(builder_data, output_name="code_structure")
-    output_files["function_diagram"] = function_files
+    # Function call diagram - only if non-HTML formats are requested
+    if any(fmt != 'html' for fmt in visualizer.formats):
+        print("Creating function call diagram...")
+        function_files = visualizer.generate_function_diagram(builder_data, output_name="code_structure")
+        output_files["function_diagram"] = function_files
+        
+        # Dependency diagram
+        print("Creating dependency diagram...")
+        dependency_files = visualizer.generate_dependency_diagram(builder_data, output_name="code_dependencies")
+        output_files["dependency_diagram"] = dependency_files
+        
+        # Execution path diagram
+        print("Creating execution path diagram...")
+        path_files = visualizer.generate_execution_path_diagram(builder_data, output_name="execution_paths")
+        output_files["execution_path_diagram"] = path_files
     
-    # Dependency diagram
-    print("Creating dependency diagram...")
-    dependency_files = visualizer.generate_dependency_diagram(builder_data, output_name="code_dependencies")
-    output_files["dependency_diagram"] = dependency_files
-    
-    # Execution path diagram
-    print("Creating execution path diagram...")
-    path_files = visualizer.generate_execution_path_diagram(builder_data, output_name="execution_paths")
-    output_files["execution_path_diagram"] = path_files
+    # Generate interactive HTML viewer if requested
+    if 'html' in visualizer.formats:
+        print("Creating interactive HTML viewer...")
+        html_path = visualizer.generate_html_viewer(builder_data, output_name="interactive_viewer")
+        output_files["interactive_viewer"] = {"html": html_path}
     
     print(f"\nAll visualizations saved to {output_dir}")
     for diagram_type, files in output_files.items():
@@ -135,17 +142,30 @@ def main():
     parser.add_argument(
         "--formats", "-f", 
         nargs="+", 
-        choices=["png", "svg", "pdf", "mermaid"],
-        default=["png", "svg", "mermaid"],
-        help="Output formats to generate"
+        choices=["png", "svg", "pdf", "mermaid", "html"],
+        default=["png", "svg", "mermaid", "html"],
+        help="Output formats to generate (including 'html' for interactive viewer)"
     )
     parser.add_argument(
         "--skip-analysis", "-s",
         action="store_true",
         help="Skip code analysis if results exist and load from JSON instead"
     )
+    parser.add_argument(
+        "--html-only", 
+        action="store_true",
+        help="Generate only the interactive HTML viewer (implies --skip-analysis if analysis data exists)"
+    )
     
     args = parser.parse_args()
+    
+    # If html-only is specified, adjust the formats and enable skip-analysis if possible
+    if args.html_only:
+        args.formats = ["html"]
+        # Only skip analysis if the analysis data exists
+        analysis_cache = os.path.join(args.output_dir or os.path.join(args.root_dir, 'results'), 'analysis_data.json')
+        if os.path.exists(analysis_cache):
+            args.skip_analysis = True
     
     analyze_project(
         root_dir=args.root_dir,

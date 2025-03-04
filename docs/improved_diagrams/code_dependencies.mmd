@@ -1,0 +1,24 @@
+```mermaid
+graph LR;
+  %% Configuration for better readability
+  linkStyle default stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5;
+  classDef default fill:#f9f9f9,stroke:#999,color:black;
+  classDef pythonModule fill:#e6f3ff,stroke:#4d8bc9,color:black;
+  classDef configFile fill:#fff7e6,stroke:#d9b38c,color:black;
+  classDef mainFile fill:#d4f1d4,stroke:#5ca75c,color:black;
+  n__Users_jamie_Coding_Sourceflow_run_analyzer_py["<b>run_analyzer.py</b><br>This script serves as the<br>entry point for running the<br>Code Project Analyzer from the<br>command line."]:::mainFile;
+  n__Users_jamie_Coding_Sourceflow_sourceflow___init___py["<b>__init__.py</b><br>An AI-powered application that<br>analyzes code projects,<br>extracts information, and<br>generates visual<br>representations of their<br>structure and relationships."]:::pythonModule;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_main_py["<b>main.py</b><br>This module serves as the main<br>entry point for the Code<br>Project Analyzer application."]:::mainFile;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_core_analyzer_py["<b>analyzer.py</b><br>A module for analyzing code<br>files using AI."]:::pythonModule;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_core___init___py["<b>__init__.py</b><br>Core modules for the Code<br>Project Analyzer."]:::pythonModule;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_core_builder_py["<b>builder.py</b><br>This module is responsible for<br>aggregating analysis results<br>across files, building<br>cross-file dependency and call<br>graphs, and identifying entry<br>points and major execution<br>paths."]:::pythonModule;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_core_explorer_py["<b>explorer.py</b><br>This module is responsible for<br>traversing the directory<br>structure of a code project,<br>identifying relevant code<br>files, and filtering out<br>non-code files and irrelevant<br>directories."]:::pythonModule;
+  n__Users_jamie_Coding_Sourceflow_sourceflow_core_visualizer_py["<b>visualizer.py</b><br>The file implements a<br>visualization generator module<br>that creates visual<br>representations of code<br>structure and dependencies<br>based on analysis results,<br>supporting formats such as<br>Graphviz and Mermaid."]:::pythonModule;
+  subgraph Legend["Legend"]
+    style Legend fill:#f9f9f9,stroke:#999,color:black;
+    mainLegend["Entry Point"]:::mainFile;
+    moduleLegend["Python Module"]:::pythonModule;
+    configLegend["Configuration"]:::configFile;
+    mainLegend -.-|"imports"| moduleLegend;
+  end
+```

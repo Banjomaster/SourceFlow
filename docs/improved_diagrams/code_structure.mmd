@@ -1,0 +1,67 @@
+```mermaid
+graph LR;
+  %% Configuration for better readability
+  linkStyle default stroke:#666,stroke-width:1px;
+  classDef default fill:#f9f9f9,stroke:#999,color:black;
+  classDef entryPoint fill:#d4f1d4,stroke:#5ca75c,stroke-width:2px,color:black;
+  classDef utilityFunc fill:#e6f3ff,stroke:#4d8bc9,color:black;
+  classDef privateFunc fill:#f9f9f9,stroke:#999,stroke-dasharray:5 5,color:black;
+  classDef moduleHeader fill:#f0f0f0,stroke:#666,color:black,text-align:center;
+  subgraph main_py["<b>main.py</b><br><i>This module serves as the main<br>entry point for the Code Project<br>Analyzer application.</i>"]
+    style main_py fill:#f0f0f0,stroke:#666,color:black;
+    main["<b>main</b><br><i>Main entry point for the CLI<br>application.</i>"]:::entryPoint;
+    analyze_project["analyze_project<br><i>Analyze a code project and<br>generate visualizations.</i>"];
+  end
+  subgraph explorer_py["<b>explorer.py</b><br><i>This module is responsible for<br>traversing the directory structure<br>of a code project, identifying<br>relevant code files, and filtering<br>out non-code files and irrelevant<br>directories.</i>"]
+    style explorer_py fill:#f0f0f0,stroke:#666,color:black;
+    n___init__["<b>__init__</b><br><i>Initializes the<br>DirectoryExplorer with<br>configurable settings.</i>"]:::entryPoint;
+    explore["<b>explore</b><br><i>Recursively explores the<br>directory structure starting<br>from root_dir.</i>"]:::entryPoint;
+    get_file_stats["<b>get_file_stats</b><br><i>Generates statistics about the<br>identified code files.</i>"]:::entryPoint;
+  end
+  subgraph analyzer_py["<b>analyzer.py</b><br><i>A module for analyzing code files<br>using AI.</i>"]
+    style analyzer_py fill:#f0f0f0,stroke:#666,color:black;
+    count_tokens["count_tokens<br><i>Counts the number of tokens in<br>the given text.</i>"];
+    n__create_prompt["_create_prompt<br><i>Creates the prompt for the AI<br>agent.</i>"]:::privateFunc;
+    n__parse_response["_parse_response<br><i>Parses the AI agent's JSON<br>response.</i>"]:::privateFunc;
+    analyze_file["<b>analyze_file</b><br><i>Analyzes a single code file.</i>"]:::entryPoint;
+    n__analyze_code["_analyze_code<br><i>Sends the code to the AI agent<br>for analysis.</i>"]:::privateFunc;
+    n__analyze_large_file["_analyze_large_file<br><i>Analyzes a large file by<br>chunking it into smaller<br>pieces.</i>"]:::privateFunc;
+  end
+  subgraph builder_py["<b>builder.py</b><br><i>This module is responsible for<br>aggregating analysis results across<br>files, building cross-file<br>dependency and call graphs, and<br>identifying entry points and major<br>execution paths.</i>"]
+    style builder_py fill:#f0f0f0,stroke:#666,color:black;
+    add_file_analysis["<b>add_file_analysis</b><br><i>Add a file's analysis results<br>to the relationship builder.</i>"]:::entryPoint;
+    get_function_details["get_function_details<br><i>Get details for a specific<br>function.</i>"];
+    get_functions_by_file["get_functions_by_file<br><i>Get all functions defined in a<br>specific file.</i>"];
+    get_function_callers["get_function_callers<br><i>Get all functions that call a<br>specific function.</i>"];
+    get_function_callees["get_function_callees<br><i>Get all functions called by a<br>specific function.</i>"];
+    get_entry_point_paths["get_entry_point_paths<br><i>Get the major execution paths<br>starting from entry points.</i>"];
+    n__trace_path_from["_trace_path_from<br><i>Trace a path starting from a<br>specific function.</i>"]:::privateFunc;
+    get_summary["<b>get_summary</b><br><i>Get a summary of the analysis<br>results.</i>"]:::entryPoint;
+  end
+  subgraph visualizer_py["<b>visualizer.py</b><br><i>The file implements a visualization<br>generator module that creates<br>visual representations of code<br>structure and dependencies based on<br>analysis results, supporting<br>formats such as Graphviz and<br>Mermaid.</i>"]
+    style visualizer_py fill:#f0f0f0,stroke:#666,color:black;
+    VisualizationGenerator___init__["<b>VisualizationGenerator.__init__</b><br><i>Initializes the visualization<br>generator with output<br>directory and formats.</i>"]:::entryPoint;
+    VisualizationGenerator_generate_function_diagram["<b>VisualizationGenerator.generate_function_diagram</b><br><i>Generates function call<br>diagrams based on analysis<br>data.</i>"]:::entryPoint;
+    VisualizationGenerator_generate_dependency_diagram["<b>VisualizationGenerator.generate_dependency_diagram</b><br><i>Generates module/file<br>dependency diagrams using<br>analysis data.</i>"]:::entryPoint;
+    VisualizationGenerator_generate_execution_path_diagram["<b>VisualizationGenerator.generate_execution_path_diagram</b><br><i>Generates execution path<br>diagrams from entry points in<br>the analysis data.</i>"]:::entryPoint;
+    VisualizationGenerator__generate_mermaid["VisualizationGenerator._generate_mermaid<br><i>Generates Mermaid syntax for<br>function call diagrams.</i>"];
+    VisualizationGenerator__generate_dependency_mermaid["VisualizationGenerator._generate_dependency_mermaid<br><i>Generates Mermaid syntax for<br>file dependency diagrams.</i>"];
+    VisualizationGenerator__generate_execution_path_mermaid["VisualizationGenerator._generate_execution_path_mermaid<br><i>Generates Mermaid syntax for<br>execution path diagrams.</i>"];
+    VisualizationGenerator__wrap_text["VisualizationGenerator._wrap_text<br><i>Wraps text to a specified<br>width with HTML line breaks<br>for Mermaid diagrams.</i>"];
+    VisualizationGenerator__sanitize_name["VisualizationGenerator._sanitize_name<br><i>Sanitizes names to create<br>valid IDs for Graphviz and<br>Mermaid.</i>"];
+    VisualizationGenerator_export_data["<b>VisualizationGenerator.export_data</b><br><i>Exports analysis data to a<br>JSON file.</i>"]:::entryPoint;
+  end
+  main -->|"calls"| analyze_project;
+  get_entry_point_paths -->|"calls"| n__trace_path_from;
+  n__trace_path_from -->|"calls"| get_function_callees;
+  n__trace_path_from -->|"calls"| n__trace_path_from;
+  get_summary -->|"calls"| get_entry_point_paths;
+  subgraph Legend["Legend"]
+    style Legend fill:#f9f9f9,stroke:#999,color:black;
+    entry["Entry Point"]:::entryPoint;
+    regular["Regular Function"];
+    utility["Special Method"]:::utilityFunc;
+    private["Private Helper"]:::privateFunc;
+    entry -->|"calls"| regular;
+  end
+```

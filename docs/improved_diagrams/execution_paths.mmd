@@ -1,0 +1,71 @@
+```mermaid
+graph LR;
+  %% Configuration for better readability
+  linkStyle default stroke:#666,stroke-width:2px,stroke-dasharray:3 2;
+  classDef default fill:#f9f9f9,stroke:#999,color:black;
+  classDef entryPoint fill:#d4f1d4,stroke:#5ca75c,stroke-width:2px,color:black;
+  classDef pathFunc fill:#f5f5f5,stroke:#666666,color:black;
+  classDef pathHeader fill:#eaeaea,stroke:#555,color:black,text-align:center;
+  subgraph Path_0["<b>Execution Path 1</b>"]
+    style Path_0 fill:#eaeaea,stroke:#555,color:black;
+    VisualizationGenerator_generate_execution_path_diagram_0["<b>VisualizationGenerator.generate_execution_path_diagram</b><br><i>Generates execution path<br>diagrams from entry points in<br>the analysis data.</i>"]:::entryPoint;
+  end
+  subgraph Path_1["<b>Execution Path 2</b>"]
+    style Path_1 fill:#eaeaea,stroke:#555,color:black;
+    analyze_file_1["<b>analyze_file</b><br><i>Analyzes a single code file.</i>"]:::entryPoint;
+  end
+  subgraph Path_2["<b>Execution Path 3</b>"]
+    style Path_2 fill:#eaeaea,stroke:#555,color:black;
+    add_file_analysis_2["<b>add_file_analysis</b><br><i>Add a file's analysis results<br>to the relationship builder.</i>"]:::entryPoint;
+  end
+  subgraph Path_3["<b>Execution Path 4</b>"]
+    style Path_3 fill:#eaeaea,stroke:#555,color:black;
+    VisualizationGenerator_export_data_3["<b>VisualizationGenerator.export_data</b><br><i>Exports analysis data to a<br>JSON file.</i>"]:::entryPoint;
+  end
+  subgraph Path_4["<b>Execution Path 5</b>"]
+    style Path_4 fill:#eaeaea,stroke:#555,color:black;
+    get_file_stats_4["<b>get_file_stats</b><br><i>Generates statistics about the<br>identified code files.</i>"]:::entryPoint;
+  end
+  subgraph Path_5["<b>Execution Path 6</b>"]
+    style Path_5 fill:#eaeaea,stroke:#555,color:black;
+    get_summary_5["<b>get_summary</b><br><i>Get a summary of the analysis<br>results.</i>"]:::entryPoint;
+    get_summary_5 ===>|"step 1"| get_entry_point_paths_5;
+    get_entry_point_paths_5["get_entry_point_paths<br><i>Get the major execution paths<br>starting from entry points.</i>"]:::pathFunc;
+    get_entry_point_paths_5 ===>|"step 2"| n__trace_path_from_5;
+    n__trace_path_from_5["_trace_path_from<br><i>Trace a path starting from a<br>specific function.</i>"]:::pathFunc;
+    n__trace_path_from_5 ===>|"step 3"| get_function_callees_5;
+    get_function_callees_5["get_function_callees<br><i>Get all functions called by a<br>specific function.</i>"]:::pathFunc;
+  end
+  subgraph Path_6["<b>Execution Path 7</b>"]
+    style Path_6 fill:#eaeaea,stroke:#555,color:black;
+    VisualizationGenerator___init___6["<b>VisualizationGenerator.__init__</b><br><i>Initializes the visualization<br>generator with output<br>directory and formats.</i>"]:::entryPoint;
+  end
+  subgraph Path_7["<b>Execution Path 8</b>"]
+    style Path_7 fill:#eaeaea,stroke:#555,color:black;
+    VisualizationGenerator_generate_dependency_diagram_7["<b>VisualizationGenerator.generate_dependency_diagram</b><br><i>Generates module/file<br>dependency diagrams using<br>analysis data.</i>"]:::entryPoint;
+  end
+  subgraph Path_8["<b>Execution Path 9</b>"]
+    style Path_8 fill:#eaeaea,stroke:#555,color:black;
+    VisualizationGenerator_generate_function_diagram_8["<b>VisualizationGenerator.generate_function_diagram</b><br><i>Generates function call<br>diagrams based on analysis<br>data.</i>"]:::entryPoint;
+  end
+  subgraph Path_9["<b>Execution Path 10</b>"]
+    style Path_9 fill:#eaeaea,stroke:#555,color:black;
+    explore_9["<b>explore</b><br><i>Recursively explores the<br>directory structure starting<br>from root_dir.</i>"]:::entryPoint;
+  end
+  subgraph Path_10["<b>Execution Path 11</b>"]
+    style Path_10 fill:#eaeaea,stroke:#555,color:black;
+    n___init___10["<b>__init__</b><br><i>Initializes the<br>DirectoryExplorer with<br>configurable settings.</i>"]:::entryPoint;
+  end
+  subgraph Path_11["<b>Execution Path 12</b>"]
+    style Path_11 fill:#eaeaea,stroke:#555,color:black;
+    main_11["<b>main</b><br><i>Main entry point for the CLI<br>application.</i>"]:::entryPoint;
+    main_11 ===>|"step 1"| analyze_project_11;
+    analyze_project_11["analyze_project<br><i>Analyze a code project and<br>generate visualizations.</i>"]:::pathFunc;
+  end
+  subgraph Legend["Legend"]
+    style Legend fill:#f9f9f9,stroke:#999,color:black;
+    entryLegend["Entry Point"]:::entryPoint;
+    funcLegend["Function Call"]:::pathFunc;
+    entryLegend ===>|"execution step"| funcLegend;
+  end
+```

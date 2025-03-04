@@ -1,0 +1,65 @@
+```mermaid
+graph LR;
+  classDef entryPoint fill:#d9ead3,stroke:#82b366,stroke-width:2px;
+  classDef regularFunc fill:#f5f5f5,stroke:#666666;
+  subgraph Path_0["<b>Execution Path 1</b>"]
+    explore_0["explore<br><i>Recursively explore<br>the directory<br>structure starting<br>from root_dir.</i>"]:::entryPoint;
+  end
+  subgraph Path_1["<b>Execution Path 2</b>"]
+    export_data_1["export_data<br><i>Export the analysis<br>data to a JSON file.</i>"]:::entryPoint;
+  end
+  subgraph Path_2["<b>Execution Path 3</b>"]
+    analyze_file_2["analyze_file<br><i>Analyzes a single<br>code file.</i>"]:::entryPoint;
+  end
+  subgraph Path_3["<b>Execution Path 4</b>"]
+    get_summary_3["get_summary<br><i>Get a summary of the<br>analysis results.</i>"]:::entryPoint;
+    get_summary_3 ===> get_entry_point_paths_3;
+    get_entry_point_paths_3["get_entry_point_paths<br><i>Get the major<br>execution paths<br>starting from entry<br>points.</i>"]:::regularFunc;
+    get_entry_point_paths_3 ===> n__trace_path_from_3;
+    n__trace_path_from_3["_trace_path_from<br><i>Trace a path<br>starting from a<br>specific function.</i>"]:::regularFunc;
+    n__trace_path_from_3 ===> get_function_callees_3;
+    get_function_callees_3["get_function_callees<br><i>Get all functions<br>called by a specific<br>function.</i>"]:::regularFunc;
+  end
+  subgraph Path_4["<b>Execution Path 5</b>"]
+    generate_function_diagram_4["generate_function_diagram<br><i>Generate function<br>call diagrams using<br>the data from the<br>relationship<br>builder.</i>"]:::entryPoint;
+    generate_function_diagram_4 ===> n__generate_mermaid_4;
+    n__generate_mermaid_4["_generate_mermaid<br><i>Generate Mermaid<br>syntax for function<br>call diagram.</i>"]:::regularFunc;
+    n__generate_mermaid_4 ===> n__wrap_text_4;
+    n__wrap_text_4["_wrap_text<br><i>Wrap text to a<br>specified width with<br>HTML line breaks for<br>Mermaid diagrams.</i>"]:::regularFunc;
+  end
+  subgraph Path_5["<b>Execution Path 6</b>"]
+    n___init___5["__init__<br><i>Initialize the<br>visualization<br>generator.</i>"]:::entryPoint;
+    n___init___5 ===> n__check_graphviz_5;
+    n__check_graphviz_5["_check_graphviz<br><i>Check if Graphviz is<br>installed by looking<br>for the 'dot'<br>executable.</i>"]:::regularFunc;
+  end
+  subgraph Path_6["<b>Execution Path 7</b>"]
+    get_file_stats_6["get_file_stats<br><i>Generate statistics<br>about the identified<br>code files.</i>"]:::entryPoint;
+  end
+  subgraph Path_7["<b>Execution Path 8</b>"]
+    generate_execution_path_diagram_7["generate_execution_path_diagram<br><i>Generate execution<br>path diagrams from<br>entry points using<br>data from the<br>relationship<br>builder.</i>"]:::entryPoint;
+    generate_execution_path_diagram_7 ===> n__generate_execution_path_mermaid_7;
+    n__generate_execution_path_mermaid_7["_generate_execution_path_mermaid<br><i>Generate Mermaid<br>syntax for execution<br>path diagram.</i>"]:::regularFunc;
+    n__generate_execution_path_mermaid_7 ===> n__wrap_text_7;
+    n__wrap_text_7["_wrap_text<br><i>Wrap text to a<br>specified width with<br>HTML line breaks for<br>Mermaid diagrams.</i>"]:::regularFunc;
+  end
+  subgraph Path_8["<b>Execution Path 9</b>"]
+    main_8["main<br><i>Main entry point for<br>the CLI application.</i>"]:::entryPoint;
+    main_8 ===> analyze_project_8;
+    analyze_project_8["analyze_project<br><i>Analyze a code<br>project and generate<br>visualizations.</i>"]:::regularFunc;
+  end
+  subgraph Path_9["<b>Execution Path 10</b>"]
+    generate_dependency_diagram_9["generate_dependency_diagram<br><i>Generate module/file<br>dependency diagrams<br>using data from the<br>relationship<br>builder.</i>"]:::entryPoint;
+    generate_dependency_diagram_9 ===> n__generate_dependency_mermaid_9;
+    n__generate_dependency_mermaid_9["_generate_dependency_mermaid<br><i>Generate Mermaid<br>syntax for file<br>dependency diagram.</i>"]:::regularFunc;
+    n__generate_dependency_mermaid_9 ===> n__wrap_text_9;
+    n__wrap_text_9["_wrap_text<br><i>Wrap text to a<br>specified width with<br>HTML line breaks for<br>Mermaid diagrams.</i>"]:::regularFunc;
+  end
+  subgraph Path_10["<b>Execution Path 11</b>"]
+    add_file_analysis_10["add_file_analysis<br><i>Add a file's<br>analysis results to<br>the relationship<br>builder.</i>"]:::entryPoint;
+  end
+  subgraph Legend["Legend"]
+    entryLegend["Entry Point"]:::entryPoint;
+    funcLegend["Function"]:::regularFunc;
+    entryLegend ===> funcLegend;
+  end
+```
