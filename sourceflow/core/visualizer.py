@@ -800,6 +800,11 @@ class VisualizationGenerator:
             background-color: white;
             display: flex;
             justify-content: center;
+            cursor: grab;
+            position: relative;
+        }}
+        .diagram-container.grabbing {{
+            cursor: grabbing;
         }}
         #mermaid-diagram {{
             transform-origin: center top;
@@ -807,6 +812,7 @@ class VisualizationGenerator:
             min-width: 100px;
             max-width: 95%;
             margin: 20px auto;
+            position: relative;
         }}
         /* Very minimal Mermaid styling */
         :root {{
@@ -914,6 +920,7 @@ class VisualizationGenerator:
         let zoomLevel = 1.5;
         const mermaidDiv = document.getElementById('mermaid-diagram');
         const zoomLevelDisplay = document.getElementById('zoom-level');
+        const diagramContainer = document.querySelector('.diagram-container');
 
         // Apply initial zoom
         updateZoom();
@@ -940,6 +947,40 @@ class VisualizationGenerator:
         document.getElementById('zoom-reset').addEventListener('click', () => {{
             zoomLevel = 1.5;
             updateZoom();
+        }});
+        
+        // Add dragging functionality
+        let isDragging = false;
+        let startX, startY, scrollLeft, scrollTop;
+
+        diagramContainer.addEventListener('mousedown', (e) => {{
+            isDragging = true;
+            diagramContainer.classList.add('grabbing');
+            startX = e.pageX - diagramContainer.offsetLeft;
+            startY = e.pageY - diagramContainer.offsetTop;
+            scrollLeft = diagramContainer.scrollLeft;
+            scrollTop = diagramContainer.scrollTop;
+        }});
+
+        diagramContainer.addEventListener('mouseleave', () => {{
+            isDragging = false;
+            diagramContainer.classList.remove('grabbing');
+        }});
+
+        diagramContainer.addEventListener('mouseup', () => {{
+            isDragging = false;
+            diagramContainer.classList.remove('grabbing');
+        }});
+
+        diagramContainer.addEventListener('mousemove', (e) => {{
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - diagramContainer.offsetLeft;
+            const y = e.pageY - diagramContainer.offsetTop;
+            const walkX = (x - startX) * 1.5;
+            const walkY = (y - startY) * 1.5;
+            diagramContainer.scrollLeft = scrollLeft - walkX;
+            diagramContainer.scrollTop = scrollTop - walkY;
         }});
     </script>
 </body>
@@ -1419,19 +1460,49 @@ class VisualizationGenerator:
                 
                 file_descriptions[file_path] = description
             
-            # Add each module with dependencies
+            # Group dependencies by source file to avoid duplicates
+            dependencies_by_source = {}
             for dependency in dependencies:
                 if isinstance(dependency, dict):
                     source = dependency.get("source", "")
-                    if source:
-                        source_name = os.path.basename(source)
-                        module_id = source_name.replace('.', '-').replace('/', '_').replace('\\', '_')
-                        description = file_descriptions.get(source, "This is a module in the codebase.")
-                        
-                        html_template += f"""
+                    target = dependency.get("target", "")
+                    if source and target:
+                        if source not in dependencies_by_source:
+                            dependencies_by_source[source] = []
+                        dependencies_by_source[source].append(target)
+
+            # Add each module with its dependencies
+            for file_path in sorted(set(list(functions_by_file.keys()) + list(dependencies_by_source.keys()))):
+                source_name = os.path.basename(file_path)
+                module_id = source_name.replace('.', '-').replace('/', '_').replace('\\', '_')
+                description = file_descriptions.get(file_path, "This is a module in the codebase.")
+                
+                html_template += f"""
             <h3 data-module="{module_id}" class="module-header">{source_name}</h3>
             <div class="module-content" id="{module_id}-content">
                 <div class="module-description">{description}</div>
+                """
+                
+                # Add the dependencies for this module
+                targets = dependencies_by_source.get(file_path, [])
+                if targets:
+                    for target in sorted(set(targets)):
+                        target_name = os.path.basename(target)
+                        html_template += f"""
+                <div class="function">
+                    <div class="function-name">Imports: {target_name}</div>
+                    <div class="function-description">This module depends on {target_name}</div>
+                </div>
+                """
+                else:
+                    html_template += """
+                <div class="function">
+                    <div class="function-name">No Dependencies</div>
+                    <div class="function-description">This module does not depend on any other modules</div>
+                </div>
+                """
+                
+                html_template += """
             </div>
             """
         except Exception as e:
@@ -1559,6 +1630,11 @@ class VisualizationGenerator:
             });
         });
         
+        // Initialize all module content elements to be hidden
+        document.querySelectorAll('.module-content').forEach(content => {
+            content.style.display = 'none';
+        });
+        
         // Module expansion
         document.querySelectorAll('h3[data-module]').forEach(header => {
             header.addEventListener('click', () => {
@@ -1566,7 +1642,9 @@ class VisualizationGenerator:
                 const moduleId = header.getAttribute('data-module') + '-content';
                 const content = document.getElementById(moduleId);
                 if (content) {
-                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                    // Check computed style for display property rather than inline style
+                    const currentDisplay = window.getComputedStyle(content).display;
+                    content.style.display = (currentDisplay === 'none') ? 'block' : 'none';
                 }
             });
         });
@@ -1796,32 +1874,67 @@ EXECUTION_CONTENT_PLACEHOLDER
         let zoomLevel = 1.5;
         const mermaidDiv = document.getElementById('mermaid-diagram');
         const zoomLevelDisplay = document.getElementById('zoom-level');
-        
+        const diagramContainer = document.querySelector('.diagram-container');
+
         // Apply initial zoom
         updateZoom();
-        
+
         // Update zoom level display and apply zoom
         function updateZoom() {{
             zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
             mermaidDiv.style.transform = `scale(${{zoomLevel}})`;
         }}
-        
+
         // Zoom in
         document.getElementById('zoom-in').addEventListener('click', () => {{
             zoomLevel = Math.min(zoomLevel + 0.1, 3);
             updateZoom();
         }});
-        
+
         // Zoom out
         document.getElementById('zoom-out').addEventListener('click', () => {{
             zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
             updateZoom();
         }});
-        
+
         // Reset zoom
         document.getElementById('zoom-reset').addEventListener('click', () => {{
             zoomLevel = 1.5;
             updateZoom();
+        }});
+        
+        // Add dragging functionality
+        let isDragging = false;
+        let startX, startY, scrollLeft, scrollTop;
+
+        diagramContainer.addEventListener('mousedown', (e) => {{
+            isDragging = true;
+            diagramContainer.classList.add('grabbing');
+            startX = e.pageX - diagramContainer.offsetLeft;
+            startY = e.pageY - diagramContainer.offsetTop;
+            scrollLeft = diagramContainer.scrollLeft;
+            scrollTop = diagramContainer.scrollTop;
+        }});
+
+        diagramContainer.addEventListener('mouseleave', () => {{
+            isDragging = false;
+            diagramContainer.classList.remove('grabbing');
+        }});
+
+        diagramContainer.addEventListener('mouseup', () => {{
+            isDragging = false;
+            diagramContainer.classList.remove('grabbing');
+        }});
+
+        diagramContainer.addEventListener('mousemove', (e) => {{
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - diagramContainer.offsetLeft;
+            const y = e.pageY - diagramContainer.offsetTop;
+            const walkX = (x - startX) * 1.5;
+            const walkY = (y - startY) * 1.5;
+            diagramContainer.scrollLeft = scrollLeft - walkX;
+            diagramContainer.scrollTop = scrollTop - walkY;
         }});
     </script>
 </body>
