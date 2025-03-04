@@ -528,10 +528,11 @@ class VisualizationGenerator:
         # Track added connections to avoid duplicates
         added_connections = set()
         
-        # Always start with explicit dependencies
+        # Start with explicit dependencies
         dependencies_to_use = {k: list(v) for k, v in file_dependencies.items()}
         
-        # Also extract additional dependencies from function calls
+        # Always extract additional dependencies from function calls 
+        # and add them to existing dependencies rather than replacing them
         function_details = builder_data.get("function_details", {})
         
         # Create a mapping of function names to file paths
@@ -541,6 +542,8 @@ class VisualizationGenerator:
                 function_to_file[func_name] = func_info["file_path"]
         
         # Extract additional dependencies from function calls
+        print("Adding dependencies from function calls...")
+        dependencies_from_calls = 0
         for func_name, func_info in function_details.items():
             if "file_path" in func_info and "calls" in func_info:
                 source_file = func_info["file_path"]
@@ -560,6 +563,9 @@ class VisualizationGenerator:
                         if (target_file != source_file and 
                             target_file not in dependencies_to_use[source_file]):
                             dependencies_to_use[source_file].append(target_file)
+                            dependencies_from_calls += 1
+        
+        print(f"Added {dependencies_from_calls} additional dependencies from function calls")
         
         # If we still have no dependencies, add the fallback test->visualizer dependency
         if sum(len(deps) for deps in dependencies_to_use.values()) == 0:
@@ -575,6 +581,7 @@ class VisualizationGenerator:
             
             if test_file and visualizer_file:
                 dependencies_to_use[test_file] = [visualizer_file]
+                print("No dependencies found, added fallback test->visualizer dependency")
         
         # Add connections with relationship type (dependency)
         for file_path, dependencies in dependencies_to_use.items():
@@ -587,8 +594,17 @@ class VisualizationGenerator:
                         
                         # Only add if this connection hasn't been added yet
                         if connection not in added_connections:
-                            # Use a different arrow style with a small label
-                            mermaid += f"  {safe_file} -.-|\"imports\"| {safe_dep};\n"
+                            # Determine the relationship type and line style
+                            # Check if it's in the original file_dependencies (explicit)
+                            is_explicit = dependency in file_dependencies.get(file_path, [])
+                            
+                            if is_explicit:
+                                # Use a solid line for explicitly defined dependencies
+                                mermaid += f"  {safe_file} -->|\"imports\"| {safe_dep};\n"
+                            else:
+                                # Use a dashed line for dependencies derived from function calls
+                                mermaid += f"  {safe_file} -.-|\"calls\"| {safe_dep};\n"
+                                
                             added_connections.add(connection)
         
         # Add legend with improved styling
@@ -597,7 +613,10 @@ class VisualizationGenerator:
         mermaid += "    mainLegend[\"Entry Point\"]:::mainFile;\n"
         mermaid += "    moduleLegend[\"Python Module\"]:::pythonModule;\n"
         mermaid += "    configLegend[\"Configuration\"]:::configFile;\n"
-        mermaid += "    mainLegend -.-|\"imports\"| moduleLegend;\n"
+        mermaid += "    relationLegend1[\"Explicit Dependency\"];\n"
+        mermaid += "    relationLegend2[\"Function Call Dependency\"];\n"
+        mermaid += "    relationLegend1 -->|\"imports\"| mainLegend;\n"
+        mermaid += "    relationLegend2 -.-|\"calls\"| moduleLegend;\n"
         mermaid += "  end\n"
         
         return mermaid
@@ -1253,13 +1272,13 @@ class VisualizationGenerator:
             execution_paths = []
             print("Warning: execution_paths is not a list. Using empty list instead.")
             
-        # If dependencies doesn't exist, create it from file_dependencies or function calls
+        # Process dependencies for visualization
         dependencies = builder_data.get("dependencies", [])
         if not dependencies:
             print("Creating dependencies array from available data")
             dependencies = []
             
-            # First try file_dependencies
+            # First use file_dependencies explicitly defined
             file_dependencies = builder_data.get("file_dependencies", {})
             has_deps = False
             
@@ -1273,34 +1292,57 @@ class VisualizationGenerator:
                             "description": f"This module imports and uses {os.path.basename(target)}"
                         })
             
-            # If no dependencies found, try function calls
-            if not has_deps:
-                print("Extracting dependencies from function calls")
-                function_details = builder_data.get("function_details", {})
-                deps_map = {}  # source_file -> set of target_files
-                
-                for func_id, func_info in function_details.items():
-                    if isinstance(func_info, dict) and "file" in func_info and "calls" in func_info:
-                        source_file = func_info["file"]
-                        if source_file not in deps_map:
-                            deps_map[source_file] = set()
+            # Always process function calls to add more dependencies, 
+            # rather than only when no dependencies are found
+            print("Adding dependencies from function calls...")
+            function_details = builder_data.get("function_details", {})
+            deps_map = {}  # source_file -> set of target_files
+            
+            for func_id, func_info in function_details.items():
+                if isinstance(func_info, dict) and ("file" in func_info or "file_path" in func_info) and "calls" in func_info:
+                    source_file = func_info.get("file", func_info.get("file_path", ""))
+                    if not source_file:
+                        continue
                         
-                        # Look at each call and see if it references another file
-                        for call in func_info.get("calls", []):
-                            if isinstance(call, dict) and "file" in call:
-                                target_file = call["file"]
-                                # Don't include self-references
-                                if target_file != source_file:
-                                    deps_map[source_file].add(target_file)
-                
-                # Convert the gathered dependencies to our standard format
-                for source_file, target_files in deps_map.items():
-                    for target_file in target_files:
+                    if source_file not in deps_map:
+                        deps_map[source_file] = set()
+                    
+                    # Look at each call and see if it references another file
+                    for call in func_info.get("calls", []):
+                        target_file = None
+                        if isinstance(call, str):
+                            # If the call is a function name, look up its file
+                            if call in function_details:
+                                target_file = function_details[call].get("file", function_details[call].get("file_path", ""))
+                        elif isinstance(call, dict):
+                            # If the call is a dictionary, get the file directly
+                            target_file = call.get("file", call.get("file_path", ""))
+                        
+                        # Don't include self-references or empty targets
+                        if target_file and target_file != source_file:
+                            deps_map[source_file].add(target_file)
+            
+            # Convert the gathered dependencies to our standard format
+            deps_from_calls = 0
+            for source_file, target_files in deps_map.items():
+                for target_file in target_files:
+                    # Check if this dependency already exists
+                    already_exists = False
+                    for dep in dependencies:
+                        if dep.get("source") == source_file and dep.get("target") == target_file:
+                            already_exists = True
+                            break
+                    
+                    # Only add if not already in the dependencies
+                    if not already_exists:
                         dependencies.append({
                             "source": source_file,
                             "target": target_file,
                             "description": f"This module calls functions from {os.path.basename(target_file)}"
                         })
+                        deps_from_calls += 1
+            
+            print(f"Added {deps_from_calls} additional dependencies from function calls")
             
             # Last resort: create a sample dependency
             if not dependencies:
@@ -1321,6 +1363,7 @@ class VisualizationGenerator:
                         "target": visualizer_file,
                         "description": f"This module imports and uses {os.path.basename(visualizer_file)}"
                     })
+                    print("No dependencies found, added fallback test->visualizer dependency")
             
             # Store the created dependencies in builder_data
             builder_data["dependencies"] = dependencies
@@ -1328,7 +1371,7 @@ class VisualizationGenerator:
         if not isinstance(dependencies, list):
             dependencies = []
             print("Warning: dependencies is not a list. Using empty list instead.")
-
+        
         output_path = os.path.join(self.output_dir, "custom_viewer.html")
 
         # HTML template for the custom viewer
@@ -1684,11 +1727,22 @@ class VisualizationGenerator:
                         if source not in dependencies_by_source:
                             dependencies_by_source[source] = []
                         
-                        # Include more details about the dependency
-                        dependencies_by_source[source].append({
-                            "target": target,
-                            "description": description or f"This module depends on {os.path.basename(target)}"
-                        })
+                        # Check if this dependency already exists
+                        already_exists = False
+                        for dep in dependencies_by_source[source]:
+                            if dep.get("target") == target:
+                                already_exists = True
+                                # If both have descriptions, use the more detailed one
+                                if description and len(description) > len(dep.get("description", "")):
+                                    dep["description"] = description
+                                break
+                        
+                        # Include more details about the dependency if it's new
+                        if not already_exists:
+                            dependencies_by_source[source].append({
+                                "target": target,
+                                "description": description or f"This module depends on {os.path.basename(target)}"
+                            })
 
             # Create more organized IDs for the dependencies tab
             # Similar to the structure in the gold standard

@@ -184,6 +184,10 @@ class RelationshipBuilder:
         file_dependencies = {}
         for file_path in self.file_summaries:
             file_dependencies[file_path] = []
+        
+        # Improve dependency tracking by making sure we capture all function call relationships
+        # Track both direct imports/dependencies and cross-file function calls
+        dependencies_from_calls = 0
             
         for func_name, details in self.all_functions.items():
             file_path = details.get('file_path', '')
@@ -193,6 +197,9 @@ class RelationshipBuilder:
                         called_file = self.all_functions[called_func].get('file_path', '')
                         if called_file and called_file != file_path and called_file not in file_dependencies[file_path]:
                             file_dependencies[file_path].append(called_file)
+                            dependencies_from_calls += 1
+        
+        print(f"Found {dependencies_from_calls} dependencies from function calls")
         
         return {
             "total_files": len(self.file_summaries),
