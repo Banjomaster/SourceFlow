@@ -1325,6 +1325,9 @@ Format your response in Markdown, with clear headings, bullet points where appro
         Returns:
             Path to the generated HTML file
         """
+        # Store the output name for use in _generate_custom_viewer_html
+        self._current_output_name = output_name
+        
         # Define output path for the HTML file
         output_path = os.path.join(self.output_dir, f"{output_name}.html")
         
@@ -1393,7 +1396,7 @@ Format your response in Markdown, with clear headings, bullet points where appro
                 if file_path not in functions_by_file:
                     functions_by_file[file_path] = []
                     file_names[file_path] = os.path.basename(file_path)
-                
+                    
                 # Ensure function has all required fields
                 enhanced_func = {
                     "name": func.get("name", "Unknown"),
@@ -1476,7 +1479,7 @@ Format your response in Markdown, with clear headings, bullet points where appro
         if not isinstance(builder_data, dict):
             print(f"Warning: builder_data is not a dictionary. Type: {type(builder_data)}")
             builder_data = {}
-            
+        
         if not isinstance(functions_by_file, dict):
             print(f"Warning: functions_by_file is not a dictionary. Type: {type(functions_by_file)}")
             functions_by_file = {}
@@ -1485,6 +1488,9 @@ Format your response in Markdown, with clear headings, bullet points where appro
             print(f"Warning: file_names is not a dictionary. Type: {type(file_names)}")
             file_names = {}
         
+        # Store for access from other methods (needed for execution path lookup)
+        self._builder_data = builder_data
+            
         # Process execution paths
         execution_paths = builder_data.get("execution_paths", [])
         if not isinstance(execution_paths, list):
@@ -1570,15 +1576,20 @@ Format your response in Markdown, with clear headings, bullet points where appro
                 """
         except Exception as e:
             description_html = f"<div class='alert alert-danger'>Error loading description: {str(e)}</div>"
-                
+        
         # Generate HTML content for structure, dependencies, and execution paths
         structure_html = self._generate_structure_html(functions_by_file)
-        dependencies_html = self._generate_dependencies_html(builder_data.get("dependencies", []), functions_by_file)
+        
+        # Use file_dependencies for better dependency visualization
+        file_dependencies = builder_data.get("file_dependencies", {})
+        dependencies_html = self._generate_dependencies_html(file_dependencies, functions_by_file)
+        
         execution_paths_html = self._generate_execution_paths_html(execution_paths)
         
         # Format HTML with all content
         try:
-            custom_viewer_path = os.path.join(self.output_dir, "custom_viewer.html")
+            output_name = getattr(self, '_current_output_name', 'custom_viewer')
+            output_file = os.path.join(self.output_dir, f"{output_name}.html")
             
             # Use the formatted HTML with all sections
             formatted_html = self._format_html_template(
@@ -1588,11 +1599,11 @@ Format your response in Markdown, with clear headings, bullet points where appro
                 description_html=description_html
             )
             
-            with open(custom_viewer_path, 'w') as f:
+            with open(output_file, 'w') as f:
                 f.write(formatted_html)
                 
-            print(f"Custom viewer generated at {custom_viewer_path}")
-            return custom_viewer_path
+            print(f"Custom viewer generated at {output_file}")
+            return output_file
         except Exception as e:
             print(f"Error generating custom viewer: {str(e)}")
             return ""
@@ -2200,6 +2211,9 @@ Format your response in Markdown, with clear headings, bullet points where appro
         
         # Add execution paths content
         try:
+            # Get function details to resolve file paths
+            function_details = getattr(self, '_builder_data', {}).get('function_details', {})
+            
             for i, path in enumerate(execution_paths):
                 try:
                     if isinstance(path, list):
@@ -2211,7 +2225,8 @@ Format your response in Markdown, with clear headings, bullet points where appro
                                 entry_file = first_step.get("file", "")
                             else:
                                 entry_name = str(first_step)
-                                entry_file = ""
+                                # Try to get file path from function_details
+                                entry_file = function_details.get(entry_name, {}).get("file_path", "")
                         else:
                             entry_name = "Unknown"
                             entry_file = ""
@@ -2224,7 +2239,17 @@ Format your response in Markdown, with clear headings, bullet points where appro
                         entry_file = entry_point.get("file", "")
                         steps = path.get("steps", [])
 
+                    # Get a reasonable file name to display
                     file_name = os.path.basename(entry_file) if entry_file else "Unknown"
+                    # If we have a module/class method, try to determine its origin
+                    if "." in entry_name and not entry_file:
+                        parts = entry_name.split(".")
+                        # Check if the class name is in the function details
+                        class_name = parts[0]
+                        class_info = function_details.get(class_name, {})
+                        if class_info:
+                            file_name = os.path.basename(class_info.get("file_path", "")) or "Unknown"
+                        
                     path_id = f"path{i+1}"
 
                     html += f"""
@@ -2246,15 +2271,22 @@ Format your response in Markdown, with clear headings, bullet points where appro
                                 if isinstance(step, dict):
                                     step_name = step.get("function_name", f"step {step_idx+1}")
                                     step_description = step.get("description", "Execution step")
+                                    step_file = step.get("file", "")
                                 else:
                                     step_name = str(step)
                                     step_description = "Execution step"
+                                    # Try to get file path from function_details
+                                    step_file = function_details.get(step_name, {}).get("file_path", "")
+                                
+                                # Get a reasonable file name to display
+                                step_file_name = os.path.basename(step_file) if step_file else ""
+                                step_display = f"{step_name} ({step_file_name})" if step_file_name else step_name
                                 
                                 indent = 20 * (step_idx + 1)
                                 
                                 html += f"""
                     <div class="function" style="margin-left: {indent}px;">
-                        <div class="function-name">step {step_idx+1}: {step_name}</div>
+                        <div class="function-name">step {step_idx+1}: {step_display}</div>
                         <div class="function-description">{step_description}</div>
                     </div>
                 """
@@ -2390,6 +2422,7 @@ Format your response in Markdown, with clear headings, bullet points where appro
         """Generate HTML for the dependencies section."""
         dependencies_html = ""
         
+        # Check if dependencies is empty
         if not dependencies:
             return "<div class='alert alert-info'>No dependency information available.</div>"
             
@@ -2410,34 +2443,54 @@ Format your response in Markdown, with clear headings, bullet points where appro
                 
                 file_descriptions[file_path] = description
             
-            # Group dependencies by source file to avoid duplicates
+            # Process dependencies based on their format
             dependencies_by_source = {}
-            for dependency in dependencies:
-                if isinstance(dependency, dict):
-                    source = dependency.get("source", "")
-                    target = dependency.get("target", "")
-                    description = dependency.get("description", "")
+            
+            # Handle dictionary format (file_dependencies)
+            if isinstance(dependencies, dict):
+                for source, targets in dependencies.items():
+                    if source not in dependencies_by_source:
+                        dependencies_by_source[source] = []
                     
-                    if source and target:
-                        if source not in dependencies_by_source:
-                            dependencies_by_source[source] = []
+                    # Process each target dependency
+                    for target in targets:
+                        dependencies_by_source[source].append({
+                            "target": target,
+                            "description": f"This module depends on {os.path.basename(target)}"
+                        })
+            
+            # Handle list format (original dependencies)
+            elif isinstance(dependencies, list):
+                for dependency in dependencies:
+                    if isinstance(dependency, dict):
+                        source = dependency.get("source", "")
+                        target = dependency.get("target", "")
+                        description = dependency.get("description", "")
                         
-                        # Check if this dependency already exists
-                        already_exists = False
-                        for dep in dependencies_by_source[source]:
-                            if dep.get("target") == target:
-                                already_exists = True
-                                # If both have descriptions, use the more detailed one
-                                if description and len(description) > len(dep.get("description", "")):
-                                    dep["description"] = description
-                                break
-                        
-                        # Include more details about the dependency if it's new
-                        if not already_exists:
-                            dependencies_by_source[source].append({
-                                "target": target,
-                                "description": description or f"This module depends on {os.path.basename(target)}"
-                            })
+                        if source and target:
+                            if source not in dependencies_by_source:
+                                dependencies_by_source[source] = []
+                            
+                            # Check if this dependency already exists
+                            already_exists = False
+                            for dep in dependencies_by_source[source]:
+                                if dep.get("target") == target:
+                                    already_exists = True
+                                    # If both have descriptions, use the more detailed one
+                                    if description and len(description) > len(dep.get("description", "")):
+                                        dep["description"] = description
+                                    break
+                            
+                            # Include more details about the dependency if it's new
+                            if not already_exists:
+                                dependencies_by_source[source].append({
+                                    "target": target,
+                                    "description": description or f"This module depends on {os.path.basename(target)}"
+                                })
+            
+            # If we still have no dependencies, show a message
+            if not dependencies_by_source:
+                return "<div class='alert alert-info'>No detailed dependency information available.</div>"
             
             # Create more organized IDs for the dependencies tab
             processed_modules = set()  # Track processed modules to avoid duplicates
@@ -2448,73 +2501,77 @@ Format your response in Markdown, with clear headings, bullet points where appro
                 rel_path = os.path.relpath(file_path, root_dir) if root_dir else file_path
                 
                 # Create a simplified module ID like in the gold standard
-                if "sourceflow/core" in rel_path:
-                    module_id = f"core_{base_name.replace('.', '_')}"
-                elif "sourceflow" in rel_path and "/core/" not in rel_path:
-                    if base_name == "__init__.py":
-                        module_id = "init"
-                    else:
-                        module_id = f"{base_name.replace('.', '_')}"
-                else:
-                    module_id = f"{base_name.replace('.', '_')}"
+                module_id = base_name.replace(".", "_").lower()
                 
-                # For display, use a simplified path
-                if "sourceflow/core" in rel_path:
-                    display_name = f"sourceflow/core/{base_name}"
-                elif "sourceflow" in rel_path and "/core/" not in rel_path:
-                    display_name = f"sourceflow/{base_name}"
-                else:
-                    display_name = base_name
-                    
+                # For a nicer display name, use relative path
+                display_name = rel_path
+                
                 return module_id, display_name
             
-            # Sort files to ensure consistent order
-            all_files = sorted(set(list(functions_by_file.keys()) + list(dependencies_by_source.keys())))
+            # Sort dependencies by module name for consistent display
+            module_ids = {}
+            for source in dependencies_by_source.keys():
+                module_id, _ = get_module_id_and_display(source, root_dir)
+                module_ids[source] = module_id
             
-            for file_path in all_files:
-                module_id, display_name = get_module_id_and_display(file_path, root_dir)
-                
-                # Skip if already processed
-                if module_id in processed_modules:
+            sorted_sources = sorted(dependencies_by_source.keys(), key=lambda s: module_ids.get(s, s).lower())
+            
+            # Generate HTML for dependencies
+            for source in sorted_sources:
+                # Skip if we already processed this module
+                if source in processed_modules:
                     continue
-                    
-                processed_modules.add(module_id)
-                description = file_descriptions.get(file_path, "This is a module in the codebase.")
                 
-                dependencies_html += f"""
+                processed_modules.add(source)
+                
+                # Get module ID and display name
+                module_id, display_name = get_module_id_and_display(source, root_dir)
+                
+                # Get module description
+                description = file_descriptions.get(source, "")
+                
+                # Get target dependencies
+                target_deps = dependencies_by_source.get(source, [])
+                
+                # Only show modules with actual dependencies
+                if target_deps:
+                    dependencies_html += f"""
             <h3 data-module="{module_id}" class="module-header">{display_name}</h3>
             <div class="module-content" id="{module_id}-content">
                 <div class="module-description">{description}</div>
-                """
                 
-                # Add the dependencies for this module
-                targets = dependencies_by_source.get(file_path, [])
-                if targets:
-                    for dep in targets:
-                        target = dep["target"]
-                        target_name = os.path.basename(target)
-                        dep_description = dep["description"]
+                <div class="dependencies-list">
+                    <h4>Dependencies:</h4>
+                    <ul>
+                """
+                    
+                    # Sort dependencies by name for consistent display
+                    sorted_deps = sorted(target_deps, key=lambda d: os.path.basename(d.get("target", "")).lower())
+                    
+                    for dep in sorted_deps:
+                        target = dep.get("target", "")
+                        dep_description = dep.get("description", "")
                         
-                        dependencies_html += f"""
-                <div class="function">
-                    <div class="function-name">Imports: {target_name}</div>
-                    <div class="function-description">{dep_description}</div>
-                </div>
-                """
-                else:
+                        if target:
+                            target_module_id, target_display = get_module_id_and_display(target, root_dir)
+                            
+                            dependencies_html += f"""
+                        <li>
+                            <div class="dependency-item">
+                                <div class="dependency-name">{target_display}</div>
+                                <div class="dependency-description">{dep_description}</div>
+                            </div>
+                        </li>
+                    """
+                    
                     dependencies_html += """
-                <div class="function">
-                    <div class="function-name">No Dependencies</div>
-                    <div class="function-description">This module does not depend on any other modules</div>
+                    </ul>
                 </div>
-                """
-
-                dependencies_html += """
             </div>
             """
-                
         except Exception as e:
             dependencies_html = f"<div class='alert alert-danger'>Error generating dependencies HTML: {str(e)}</div>"
+            print(f"Error generating dependencies HTML: {str(e)}")
             
         return dependencies_html
 
