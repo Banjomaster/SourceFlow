@@ -899,6 +899,9 @@ class VisualizationGenerator:
             cleaned_content = re.sub(r'^```mermaid\s*', '', diagram_content)
             cleaned_content = re.sub(r'```\s*$', '', cleaned_content)
         
+        # Use the current output name for the back button link
+        back_button_link = f"./{self._current_output_name}.html" if hasattr(self, '_current_output_name') else "./interactive_viewer.html"
+        
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1030,7 +1033,7 @@ class VisualizationGenerator:
 <body>
     <div class="header">
         <h1 class="title">{title}</h1>
-        <a href="./custom_viewer.html" class="back-button">Back to Overview</a>
+        <a href="{back_button_link}" class="back-button">Back to Overview</a>
     </div>
 
     <div class="controls-container">
@@ -1266,6 +1269,10 @@ You are an expert code analyzer. Your task is to create a clear and concise appl
 3. Main Components: What are the key modules, classes, or files?
 4. Architecture: How is the application structured?
 5. Key Execution Flows: What are the main execution paths through the code?
+   - For each execution flow, provide detailed step-by-step function calls with specific function names
+   - For the Main Execution flow, trace the complete path from entry point to final output, including ALL important function calls
+   - Do NOT use generic statements like "(calls various functions)" - always list the actual function names
+   - Include file names where helpful for context
 6. Implementation Focus Areas: What should new developers focus on first?
 
 Format your response in Markdown, with clear headings, bullet points where appropriate, and code references where helpful.
@@ -2214,7 +2221,33 @@ Format your response in Markdown, with clear headings, bullet points where appro
             # Get function details to resolve file paths
             function_details = getattr(self, '_builder_data', {}).get('function_details', {})
             
-            for i, path in enumerate(execution_paths):
+            # Sort paths to have main entry points first
+            # This is a simple heuristic to prioritize main-like functions at the top
+            def get_path_priority(path):
+                if isinstance(path, list) and path:
+                    first_step = path[0]
+                    if isinstance(first_step, dict):
+                        func_name = first_step.get("function_name", "").lower()
+                    else:
+                        func_name = str(first_step).lower()
+                else:
+                    entry_point = path.get("entry_point", {})
+                    func_name = entry_point.get("name", "").lower()
+                
+                # Priority based on function name (main-like functions first)
+                if "main" in func_name:
+                    return 0
+                elif "run" in func_name:
+                    return 1
+                elif "analyze" in func_name:
+                    return 2
+                else:
+                    return 3
+            
+            # Sort paths by priority (lowest first)
+            sorted_paths = sorted(execution_paths, key=get_path_priority)
+            
+            for i, path in enumerate(sorted_paths):
                 try:
                     if isinstance(path, list):
                         # Handle the case where path is a list
@@ -2302,16 +2335,11 @@ Format your response in Markdown, with clear headings, bullet points where appro
             """
                 except Exception as e:
                     print(f"Error processing execution path {i+1}: {str(e)}")
-                    html += f"""
-            <h3 data-module="path-error-{i+1}" class="module-header">Execution Path {i+1}: Error</h3>
-            <div class="module-content" id="path-error-{i+1}-content">
-                <div class="module-description">An error occurred while processing this execution path: {str(e)}</div>
-            </div>
-            """
+                    
+            return html
         except Exception as e:
-            print(f"Error processing execution paths: {str(e)}")
-            
-        return html
+            print(f"Error generating execution paths HTML: {str(e)}")
+            return "<p>Error generating execution paths.</p>"
 
     def _generate_structure_html(self, functions_by_file):
         """Generate HTML for the code structure section."""
