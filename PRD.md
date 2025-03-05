@@ -139,6 +139,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Application description generation for codebase overview
 - Description tab in HTML viewer with markdown rendering
 - Improved markdown formatting for better readability
+- Node limiting for dependency diagrams to prevent rendering errors
+- Regeneration of diagrams from existing analysis data without rerunning analysis
 
 ### 4.2 In Progress Items ⏳
 - Additional visualization customization options
@@ -150,6 +152,7 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Differential analysis between versions
 - IDE plugins for real-time analysis
 - Enhanced module descriptions and auto-documentation
+- Integration of application description generation into main analysis flow
 
 ## 5. Technical Specifications
 
@@ -196,6 +199,7 @@ The Code Project Analyzer follows a pipeline architecture with the following key
   - Responsive diagram sizing
   - Interactive pan and zoom capabilities
   - Automatic complexity detection and adjustment
+  - Node limiting for large codebases to prevent rendering errors
 - Interactive HTML viewer:
   - Tabbed interface for Code Structure, Dependencies, Execution Paths, and Description
   - Search functionality to filter components
@@ -260,6 +264,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - ✅ Improved Mermaid diagrams with simplified styling for better rendering
 - ✅ Application description generation for codebase overview
 - ✅ Interactive HTML viewer with tabbed interface including Description tab
+- ✅ Node limiting for dependency diagrams to prevent rendering errors
+- ✅ Regeneration of diagrams from existing analysis data
 - Parallel processing for faster analysis
 - Caching of analysis results
 
@@ -300,4 +306,6 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Environment variable configuration via .env file simplifies setup and customization
 - Visualization improvements include color-coding, legends, relationship labels, and HTML formatting for readability
 - Application descriptions are generated using the OPENAI_MODEL specified in the .env file
-- Markdown rendering includes extensions for improved code formatting 
+- Markdown rendering includes extensions for improved code formatting
+- Application description generation is available through the regenerate_diagrams.py script with the --generate-description flag
+- Node limiting is implemented to prevent rendering errors in large diagrams 
