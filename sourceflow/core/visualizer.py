@@ -66,13 +66,14 @@ class VisualizationGenerator:
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
     
-    def generate_function_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_structure") -> Dict[str, str]:
+    def generate_function_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_structure", max_nodes: int = None) -> Dict[str, str]:
         """
         Generate function call diagrams using the data from the relationship builder.
         
         Args:
             builder_data: Data from the RelationshipBuilder's get_summary method
             output_name: Base name for the output files
+            max_nodes: Optional limit on the number of nodes to include in the diagram
             
         Returns:
             Dictionary mapping format names to output file paths
@@ -81,7 +82,7 @@ class VisualizationGenerator:
         
         # Always generate Mermaid diagrams
         if 'mermaid' in self.formats or not self.graphviz_available:
-            mermaid = self._generate_mermaid(builder_data)
+            mermaid = self._generate_mermaid(builder_data, max_nodes=max_nodes)
             output_path = os.path.join(self.output_dir, f"{output_name}.mmd")
             with open(output_path, 'w') as f:
                 f.write(mermaid)
@@ -178,13 +179,14 @@ class VisualizationGenerator:
         
         return output_files
     
-    def generate_dependency_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_dependencies") -> Dict[str, str]:
+    def generate_dependency_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_dependencies", max_nodes: int = None) -> Dict[str, str]:
         """
         Generate module/file dependency diagrams using data from the relationship builder.
         
         Args:
             builder_data: Data from the RelationshipBuilder's get_summary method
             output_name: Base name for the output files
+            max_nodes: Optional limit on number of nodes to include (helps with large diagrams)
             
         Returns:
             Dictionary mapping format names to output file paths
@@ -193,7 +195,7 @@ class VisualizationGenerator:
         
         # Always generate Mermaid diagrams
         if 'mermaid' in self.formats or not self.graphviz_available:
-            mermaid = self._generate_dependency_mermaid(builder_data)
+            mermaid = self._generate_dependency_mermaid(builder_data, max_nodes=max_nodes)
             output_path = os.path.join(self.output_dir, f"{output_name}.mmd")
             with open(output_path, 'w') as f:
                 f.write(mermaid)
@@ -229,20 +231,39 @@ class VisualizationGenerator:
                 file_dependencies = builder_data.get('file_dependencies', {})
                 file_summaries = builder_data.get('file_summaries', {})
                 
+                # Apply node limiting if specified for Graphviz as well
+                nodes_to_include = set(file_summaries.keys())
+                if max_nodes and len(file_summaries) > max_nodes:
+                    # Calculate connection count for importance ranking
+                    connection_count = {}
+                    for file_path in file_summaries:
+                        # Count incoming connections
+                        incoming = sum(1 for deps in file_dependencies.values() if file_path in deps)
+                        # Count outgoing connections
+                        outgoing = len(file_dependencies.get(file_path, []))
+                        connection_count[file_path] = incoming + outgoing
+                    
+                    # Get top files by connection count
+                    top_files = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
+                    nodes_to_include = set(file_path for file_path, _ in top_files)
+                
                 # Add nodes for each file
                 for file_path, summary in file_summaries.items():
-                    file_name = os.path.basename(file_path)
-                    graph.node(
-                        file_path,
-                        label=f"{file_name}\n{summary[:30]}...",
-                        tooltip=summary
-                    )
+                    if file_path in nodes_to_include:  # Only include selected nodes
+                        file_name = os.path.basename(file_path)
+                        graph.node(
+                            file_path,
+                            label=f"{file_name}\n{summary[:30]}...",
+                            tooltip=summary
+                        )
                 
                 # Add edges for dependencies
                 for file_path, dependencies in file_dependencies.items():
-                    for dependency in dependencies:
-                        if dependency in file_summaries:
-                            graph.edge(file_path, dependency, style='dashed')
+                    if file_path in nodes_to_include:  # Only include selected source nodes
+                        for dependency in dependencies:
+                            if dependency in nodes_to_include:  # Only include selected target nodes
+                                if dependency in file_summaries:
+                                    graph.edge(file_path, dependency, style='dashed')
                 
                 # Generate output in all requested formats
                 for fmt in self.formats:
@@ -370,8 +391,8 @@ class VisualizationGenerator:
         
         return output_files
     
-    def _generate_mermaid(self, builder_data: Dict[str, Any]) -> str:
-        """Generate Mermaid syntax for function call diagram."""
+    def _generate_mermaid(self, builder_data: Dict[str, Any], max_nodes: int = None) -> str:
+        """Generate Mermaid syntax for function call diagram with optional size limiting."""
         function_details = builder_data.get('function_details', {})
         file_functions = builder_data.get('file_functions', {})
         entry_points = builder_data.get('entry_points', [])
@@ -399,6 +420,39 @@ class VisualizationGenerator:
         if not function_details and not file_functions:
             mermaid += "  noData[\"No function data available\"]\n"
             return mermaid
+        
+        # ADDED: Size limiting logic for functions - prioritize by connection count
+        functions_to_include = set()
+        if max_nodes and sum(len(funcs) for funcs in file_functions.values()) > max_nodes:
+            print(f"Limiting diagram to {max_nodes} most connected functions out of {sum(len(funcs) for funcs in file_functions.values())}")
+            
+            # Count connections to rank importance
+            connection_count = {}
+            for func_name in function_details:
+                # Count incoming connections
+                incoming = sum(1 for calls in function_calls.values() if func_name in calls)
+                # Count outgoing connections
+                outgoing = len(function_calls.get(func_name, []))
+                # Extra weight for entry points
+                entry_point_bonus = 5 if func_name in entry_points else 0
+                connection_count[func_name] = incoming + outgoing + entry_point_bonus
+            
+            # Get top functions by connection count
+            top_functions = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
+            functions_to_include = set(func_name for func_name, _ in top_functions)
+            print(f"Selected {len(functions_to_include)} functions based on connection count")
+            
+            # Filter file_functions to only include the selected functions
+            filtered_file_functions = {}
+            for file_path, functions in file_functions.items():
+                included_funcs = [f for f in functions if f in functions_to_include]
+                if included_funcs:
+                    filtered_file_functions[file_path] = included_funcs
+            file_functions = filtered_file_functions
+        else:
+            # Include all functions if no limit or under the limit
+            for funcs in file_functions.values():
+                functions_to_include.update(funcs)
             
         # Group functions by file
         for file_path, functions in file_functions.items():
@@ -448,11 +502,12 @@ class VisualizationGenerator:
         
         # Add connections with labels for the type of relationship
         for func_name, callees in function_calls.items():
-            for callee in callees:
-                if callee in function_details:
-                    safe_func = self._sanitize_name(func_name)
-                    safe_callee = self._sanitize_name(callee)
-                    mermaid += f"  {safe_func} -->|calls| {safe_callee}\n"
+            if func_name in functions_to_include:
+                for callee in callees:
+                    if callee in functions_to_include and callee in function_details:
+                        safe_func = self._sanitize_name(func_name)
+                        safe_callee = self._sanitize_name(callee)
+                        mermaid += f"  {safe_func} -->|calls| {safe_callee}\n"
         
         # Add comprehensive legend with all node types
         mermaid += "  subgraph Legend[\"Legend\"]\n"
@@ -471,8 +526,8 @@ class VisualizationGenerator:
         
         return mermaid
     
-    def _generate_dependency_mermaid(self, builder_data: Dict[str, Any]) -> str:
-        """Generate Mermaid syntax for module dependencies diagram."""
+    def _generate_dependency_mermaid(self, builder_data: Dict[str, Any], max_nodes: int = None) -> str:
+        """Generate Mermaid syntax for module dependencies diagram with optional size limiting."""
         file_summaries = builder_data.get('file_summaries', {})
         file_dependencies = builder_data.get('file_dependencies', {})
         
@@ -498,9 +553,31 @@ class VisualizationGenerator:
         if not file_summaries:
             mermaid += "  noData[\"No file dependency data available\"];\n"
             return mermaid
+        
+        # ADDED: Size limiting logic - prioritize by connection count
+        nodes_to_include = set()
+        if max_nodes and len(file_summaries) > max_nodes:
+            print(f"Limiting diagram to {max_nodes} most connected nodes out of {len(file_summaries)}")
+            
+            # Count connections to rank importance
+            connection_count = {}
+            for file_path in file_summaries:
+                # Count incoming connections
+                incoming = sum(1 for deps in file_dependencies.values() if file_path in deps)
+                # Count outgoing connections
+                outgoing = len(file_dependencies.get(file_path, []))
+                connection_count[file_path] = incoming + outgoing
+            
+            # Get top files by connection count
+            top_files = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
+            nodes_to_include = set(file_path for file_path, _ in top_files)
+            print(f"Selected {len(nodes_to_include)} nodes based on connection count")
+        else:
+            # Include all nodes if no limit or under the limit
+            nodes_to_include = set(file_summaries.keys())
             
         # Add nodes for each file with wrapped module descriptions
-        for file_path in file_summaries:
+        for file_path in nodes_to_include:
             file_name = os.path.basename(file_path)
             # Use a different node prefix like the gold standard
             safe_name = "node_n__" + file_path.replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
@@ -529,7 +606,7 @@ class VisualizationGenerator:
         added_connections = set()
         
         # Start with explicit dependencies
-        dependencies_to_use = {k: list(v) for k, v in file_dependencies.items()}
+        dependencies_to_use = {k: list(v) for k, v in file_dependencies.items() if k in nodes_to_include}
         
         # Always extract additional dependencies from function calls 
         # and add them to existing dependencies rather than replacing them
@@ -548,6 +625,10 @@ class VisualizationGenerator:
             if "file_path" in func_info and "calls" in func_info:
                 source_file = func_info["file_path"]
                 
+                # Skip files not in our included nodes
+                if source_file not in nodes_to_include:
+                    continue
+                    
                 # Initialize if not already in dependencies
                 if source_file not in dependencies_to_use:
                     dependencies_to_use[source_file] = []
@@ -558,6 +639,10 @@ class VisualizationGenerator:
                     if called_func in function_to_file:
                         target_file = function_to_file[called_func]
                         
+                        # Skip targets not in our included nodes
+                        if target_file not in nodes_to_include:
+                            continue
+                            
                         # Only add if it's a different file (no self-references)
                         # and not already in the dependencies list
                         if (target_file != source_file and 
@@ -573,7 +658,7 @@ class VisualizationGenerator:
             visualizer_file = None
             test_file = None
             
-            for file_path in file_summaries:
+            for file_path in nodes_to_include:
                 if "visualizer.py" in file_path and "core" in file_path:
                     visualizer_file = file_path
                 elif "test_visualizer_output.py" in file_path:
@@ -588,7 +673,7 @@ class VisualizationGenerator:
             if dependencies:  # Only process if there are dependencies
                 safe_file = "node_n__" + file_path.replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
                 for dependency in dependencies:
-                    if dependency in file_summaries:
+                    if dependency in nodes_to_include:  # Only include targets in our node set
                         safe_dep = "node_n__" + dependency.replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
                         connection = f"{safe_file}_{safe_dep}"
                         
@@ -606,6 +691,12 @@ class VisualizationGenerator:
                                 mermaid += f"  {safe_file} -.-|\"calls\"| {safe_dep};\n"
                                 
                             added_connections.add(connection)
+        
+        # Add note about limited view if applicable
+        if max_nodes and len(file_summaries) > max_nodes:
+            mermaid += "  subgraph Note[\"Size Limitation Note\"]\n"
+            mermaid += f"    note[\"Showing {len(nodes_to_include)} of {len(file_summaries)} files. Use filter for more detail.\"];\n"
+            mermaid += "  end\n"
         
         # Add legend with improved styling
         mermaid += "  subgraph Legend[\"Legend\"]\n"
@@ -851,10 +942,11 @@ class VisualizationGenerator:
             background-color: white;
             border-bottom: 1px solid #ddd;
             display: flex;
+            justify-content: space-between;
             align-items: center;
         }}
         .info-box {{
-            background-color: #e6f3ff;
+            background-color: #f9f9f9;
             border-left: 4px solid #4d8bc9;
             padding: 10px 15px;
             margin-right: 20px;
@@ -888,24 +980,12 @@ class VisualizationGenerator:
             cursor: grab;
             position: relative;
         }}
-        .diagram-container.grabbing {{
-            cursor: grabbing;
-        }}
         #mermaid-diagram {{
-            transform-origin: center top;
-            padding: 0;
-            min-width: 100px;
-            max-width: 95%;
-            margin: 20px auto;
-            position: relative;
+            margin: 20px;
+            transform-origin: top center;
         }}
-        /* Very minimal Mermaid styling */
-        :root {{
-            --mermaid-font-family: Arial, sans-serif;
-        }}
-        .call-path::before {{
-            content: "→ ";
-            color: #999;
+        .mermaid {{
+            font-family: 'Courier New', Courier, monospace;
         }}
         .call-steps {{
             color: #666;
@@ -916,6 +996,26 @@ class VisualizationGenerator:
         .call-steps::before {{
             content: "→ ";
             color: #999;
+        }}
+        .error-message {{
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 18px;
+            display: none;
+        }}
+        .fallback-message {{
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 4px;
+            text-align: center;
         }}
     </style>
 </head>
@@ -939,6 +1039,9 @@ class VisualizationGenerator:
     </div>
 
     <div class="diagram-container">
+        <div id="error-display" class="error-message">
+            Maximum text size in diagram exceeded. Please use a smaller diagram or try increasing the max_nodes parameter.
+        </div>
         <div id="mermaid-diagram" class="mermaid">
 {cleaned_content}
         </div>
@@ -952,6 +1055,7 @@ class VisualizationGenerator:
                 startOnLoad: true,
                 theme: 'default',
                 securityLevel: 'loose',
+                maxTextSize: 500000, // Increased from default of ~60000 to allow larger diagrams
                 flowchart: {{
                     useMaxWidth: false,
                     htmlLabels: true,
@@ -999,7 +1103,27 @@ class VisualizationGenerator:
         }}
 
         // Initialize Mermaid with the configuration
-        mermaid.initialize(configureMermaidByDiagramType());
+        try {{
+            mermaid.initialize(configureMermaidByDiagramType());
+            
+            // Add error handler for the "Maximum text size in diagram exceeded" error
+            mermaid.parseError = function(err, hash) {{
+                console.error("Mermaid error:", err);
+                if (err.toString().includes("Maximum text size in diagram exceeded")) {{
+                    document.getElementById('error-display').style.display = 'block';
+                    document.getElementById('mermaid-diagram').innerHTML = 
+                        '<div class="fallback-message">The diagram is too large to be displayed in Mermaid. ' +
+                        'Try regenerating with a lower max_nodes value (e.g., --max-nodes 20).</div>';
+                }}
+            }};
+        }} catch (e) {{
+            console.error("Error initializing Mermaid:", e);
+            document.getElementById('error-display').style.display = 'block';
+            document.getElementById('error-display').textContent = e.toString();
+            document.getElementById('mermaid-diagram').innerHTML = 
+                '<div class="fallback-message">Could not initialize diagram renderer. ' + 
+                'The diagram might be too large or complex.</div>';
+        }}
 
         // Zoom functionality
         let zoomLevel = 1.5;
@@ -2146,6 +2270,7 @@ EXECUTION_CONTENT_PLACEHOLDER
                 startOnLoad: true,
                 theme: 'default',
                 securityLevel: 'loose',
+                maxTextSize: 500000, // Increased from default of ~60000 to allow larger diagrams
                 flowchart: {{
                     useMaxWidth: false,
                     htmlLabels: true,
@@ -2289,85 +2414,116 @@ EXECUTION_CONTENT_PLACEHOLDER
             print(f"Error saving visualization: {e}")
             return False
     
-    def visualize_codebase(self, output_name="codebase_visualization", open_browser=True):
+    def visualize_codebase(self, output_name="codebase_visualization", open_browser=True, max_nodes=None):
         """
-        Generate a visualization of the codebase and save it as an HTML file.
+        Create all visualizations for the current codebase.
         
         Args:
-            output_name: The base name for the output file (without extension)
-            open_browser: Whether to open the visualization in a browser
+            output_name: Base name for the output files
+            open_browser: Whether to open the browser to view the visualization
+            max_nodes: Optional limit on number of nodes to include in diagrams (helps with large codebases)
             
         Returns:
-            str: The path to the generated visualization file
+            Path to the generated HTML visualization file
         """
-        os.makedirs(self.output_dir, exist_ok=True)
+        if not self.codebase:
+            print("No codebase available for visualization. Please initialize the visualizer with a codebase.")
+            return None
         
-        # Generate the structure diagram
-        structure_content = self._generate_structure_diagram()
-        
-        # Generate the dependencies diagram
-        dependencies_content = self._generate_dependencies_diagram()
-        
-        # Generate the execution paths diagram
+        # Generate all diagrams
+        structure_content = self._generate_structure_diagram(max_nodes=max_nodes)
+        dependencies_content = self._generate_dependencies_diagram(max_nodes=max_nodes)
         execution_content = self._generate_execution_paths_diagram()
         
-        # Ensure all diagrams have the proper syntax
-        structure_content = self._ensure_valid_mermaid_syntax(structure_content, "graph TD")
-        dependencies_content = self._ensure_valid_mermaid_syntax(dependencies_content, "graph LR")
-        execution_content = self._ensure_valid_mermaid_syntax(execution_content, "flowchart TD")
+        # Ensure content is compatible with Mermaid
+        structure_content = self._ensure_valid_mermaid_syntax(structure_content, "graph")
+        dependencies_content = self._ensure_valid_mermaid_syntax(dependencies_content, "graph")
+        execution_content = self._ensure_valid_mermaid_syntax(execution_content, "graph")
         
-        # Generate the HTML visualization
+        # Generate combined HTML file
         html_content = self.generate_html_visualization(
-            structure_content,
+            structure_content, 
             dependencies_content,
             execution_content
         )
         
-        # Save the HTML content to a file
+        # Save to file
         output_path = os.path.join(self.output_dir, f"{output_name}.html")
         self.save_html_visualization(html_content, output_path)
         
-        # Open the visualization in a browser if requested
-        if open_browser:
+        # Open in browser if requested
+        if open_browser and output_path:
             try:
+                import webbrowser
                 webbrowser.open(f"file://{os.path.abspath(output_path)}")
-                print(f"Opened visualization in browser: {output_path}")
+                print(f"Opening visualization in browser: {output_path}")
             except Exception as e:
-                print(f"Error opening visualization in browser: {e}")
+                print(f"Failed to open browser: {e}")
         
         return output_path
     
-    def _generate_structure_diagram(self):
+    def _generate_structure_diagram(self, max_nodes=None):
         """
         Generate a Mermaid diagram representing the structure of the codebase.
         
+        Args:
+            max_nodes: Optional limit on the number of nodes to include in the diagram
+            
         Returns:
             str: The Mermaid diagram content as a string
         """
         if not self.codebase or not hasattr(self.codebase, 'modules') or not self.codebase.modules:
             return "graph TD\n    A[No module data available]"
-        
+            
         diagram = "graph TD\n"
         
-        # Create nodes for each module
-        for module in self.codebase.modules:
+        # Apply size limiting if needed
+        modules_to_include = []
+        if max_nodes and hasattr(self.codebase, 'modules') and len(self.codebase.modules) > max_nodes:
+            print(f"Limiting structure diagram to {max_nodes} most connected modules out of {len(self.codebase.modules)}")
+            
+            # Count connections to rank importance
+            connection_count = {}
+            for module in self.codebase.modules:
+                # Count incoming connections (modules that import this module)
+                incoming = sum(1 for m in self.codebase.modules if hasattr(m, 'imports') and module.name in m.imports)
+                # Count outgoing connections (modules that this module imports)
+                outgoing = len(module.imports) if hasattr(module, 'imports') else 0
+                connection_count[module] = incoming + outgoing
+                
+            # Get the top modules by connection count
+            modules_to_include = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
+            modules_to_include = [module for module, _ in modules_to_include]
+            print(f"Selected {len(modules_to_include)} modules based on connection count")
+        else:
+            # Include all modules if no limit or under the limit
+            modules_to_include = self.codebase.modules
+        
+        # Create nodes for each selected module
+        for module in modules_to_include:
             module_id = self._sanitize_id(module.name)
             diagram += f"    {module_id}[{module.name}]\n"
         
-        # Add connections between modules
-        for module in self.codebase.modules:
+        # Add connections between modules (only for the selected modules)
+        module_names_to_include = [module.name for module in modules_to_include]
+        for module in modules_to_include:
             if hasattr(module, 'imports') and module.imports:
                 module_id = self._sanitize_id(module.name)
                 for imported_module in module.imports:
-                    imported_id = self._sanitize_id(imported_module)
-                    diagram += f"    {module_id} --> {imported_id}\n"
+                    # Only add connections to modules that are included in our selection
+                    if imported_module in module_names_to_include:
+                        imported_id = self._sanitize_id(imported_module)
+                        diagram += f"    {module_id} --> {imported_id}\n"
         
         return diagram
     
-    def _generate_dependencies_diagram(self):
+    def _generate_dependencies_diagram(self, max_nodes=None):
         """
         Generate a Mermaid diagram representing the dependencies between modules.
         
+        Args:
+            max_nodes: Optional limit on number of nodes to include (helps with large diagrams)
+            
         Returns:
             str: The Mermaid diagram content as a string
         """
@@ -2376,9 +2532,31 @@ EXECUTION_CONTENT_PLACEHOLDER
         
         diagram = "graph LR\n"
         
+        # Apply node limiting if needed
+        modules_to_include = self.codebase.modules
+        if max_nodes and len(self.codebase.modules) > max_nodes:
+            print(f"Limiting dependency diagram to {max_nodes} most connected modules")
+            
+            # Count connections for each module
+            connection_count = {}
+            for module in self.codebase.modules:
+                # Count incoming connections
+                incoming = sum(1 for m in self.codebase.modules if hasattr(m, 'imports') and module.name in m.imports)
+                # Count outgoing connections
+                outgoing = len(module.imports) if hasattr(module, 'imports') else 0
+                connection_count[module.name] = incoming + outgoing
+            
+            # Get top modules by connection count
+            top_modules = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
+            top_module_names = set(name for name, _ in top_modules)
+            
+            # Filter modules
+            modules_to_include = [m for m in self.codebase.modules if m.name in top_module_names]
+            print(f"Selected {len(modules_to_include)} modules based on connection count")
+        
         # Group modules by package/directory
         packages = {}
-        for module in self.codebase.modules:
+        for module in modules_to_include:
             parts = module.name.split('.')
             if len(parts) > 1:
                 package = parts[0]
@@ -2402,13 +2580,21 @@ EXECUTION_CONTENT_PLACEHOLDER
             diagram += "    end\n"
         
         # Add connections between modules
-        for module in self.codebase.modules:
+        for module in modules_to_include:
             if hasattr(module, 'imports') and module.imports:
                 module_id = self._sanitize_id(module.name)
                 for imported_module in module.imports:
-                    imported_id = self._sanitize_id(imported_module)
-                    diagram += f"    {module_id} --> {imported_id}\n"
+                    # Only include connections to modules we're including
+                    if any(m.name == imported_module for m in modules_to_include):
+                        imported_id = self._sanitize_id(imported_module)
+                        diagram += f"    {module_id} --> {imported_id}\n"
         
+        # Add note about limited view if applicable
+        if max_nodes and len(self.codebase.modules) > max_nodes:
+            diagram += "    subgraph Note[\"Size Limitation Note\"]\n"
+            diagram += f"        note[\"Showing {len(modules_to_include)} of {len(self.codebase.modules)} modules. Use filter for more detail.\"]\n"
+            diagram += "    end\n"
+            
         return diagram
     
     def _generate_execution_paths_diagram(self):
