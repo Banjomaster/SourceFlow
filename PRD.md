@@ -25,12 +25,14 @@ This document outlines the requirements, architecture, and implementation plan f
 - **FR4:** ✅ Generate visual diagrams of code structure and relationships
 - **FR5:** ✅ Handle large codebases through chunking and hierarchical analysis
 - **FR6:** ✅ Support multiple diagram output formats (Graphviz, Mermaid)
+- **FR7:** ✅ Generate comprehensive application descriptions to aid new developers
 
 #### 2.1.2 User Interface
-- **FR7:** ✅ Accept input for the root directory of a code project
-- **FR8:** ✅ Display progress updates during analysis
-- **FR9:** ✅ Generate and display or save resulting diagrams
-- **FR10:** ✅ Provide error logs and diagnostics for failed analyses
+- **FR8:** ✅ Accept input for the root directory of a code project
+- **FR9:** ✅ Display progress updates during analysis
+- **FR10:** ✅ Generate and display or save resulting diagrams
+- **FR11:** ✅ Provide error logs and diagnostics for failed analyses
+- **FR12:** ✅ Present organized information through an interactive HTML viewer with tabbed interface
 
 ### 2.2 Non-Functional Requirements
 
@@ -73,6 +75,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
    - Constructs graph representations
    - Generates multiple output formats (Graphviz, Mermaid)
    - Organizes visual elements for clarity
+   - Generates comprehensive application descriptions
+   - Creates interactive HTML viewer with tabbed interface
 
 5. **Orchestrator** ✅
    - Manages the overall analysis workflow
@@ -102,6 +106,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Primary support for Graphviz and Mermaid
 - Extensible interface for additional visualization formats
 - Configurable visual styling and layout options
+- Generates comprehensive application descriptions using OpenAI
+- Creates interactive HTML viewer with tabs for different visualization aspects
 
 #### 3.2.5 Orchestrator ✅
 - Implements workflow control and sequencing
@@ -130,6 +136,9 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Interactive HTML viewers for diagrams
 - Deterministic node name sanitization for reliable testing
 - Robust visualization output testing against gold standards
+- Application description generation for codebase overview
+- Description tab in HTML viewer with markdown rendering
+- Improved markdown formatting for better readability
 
 ### 4.2 In Progress Items ⏳
 - Additional visualization customization options
@@ -153,12 +162,14 @@ The Code Project Analyzer follows a pipeline architecture with the following key
   - tiktoken (for token counting)
   - pytest (for testing)
   - python-dotenv (for environment variables)
+  - markdown (for rendering application descriptions)
 
 ### 5.2 AI Integration
 - API: OpenAI API (GPT-4 or custom model specified in .env)
 - Authentication: API key via environment variable or .env file
 - Default model: Set in .env file (defaults to gpt-4o-mini)
 - Fallback models: Configurable via environment variables
+- Application description generation using OpenAI model specified in environment
 
 ### 5.3 File Handling
 - Supported file extensions: .py, .js, .java, .cpp, .c, .go, .rs, .rb
@@ -185,8 +196,28 @@ The Code Project Analyzer follows a pipeline architecture with the following key
   - Responsive diagram sizing
   - Interactive pan and zoom capabilities
   - Automatic complexity detection and adjustment
+- Interactive HTML viewer:
+  - Tabbed interface for Code Structure, Dependencies, Execution Paths, and Description
+  - Search functionality to filter components
+  - Expandable/collapsible modules for better navigation
+  - Responsive design for different screen sizes
+  - Markdown rendering for application descriptions with syntax highlighting
 
-### 5.5 Error Handling
+### 5.5 Application Description Generation
+- Comprehensive overview of analyzed application
+- Generated using OpenAI model specified in environment
+- Markdown formatting for better readability
+- Sections include:
+  - Purpose and overview of application
+  - Core functionality
+  - Main components
+  - Architecture
+  - Key execution flows
+  - Implementation focus areas for new developers
+- Displayed in a dedicated tab within the HTML viewer
+- Properly formatted with code highlighting
+
+### 5.6 Error Handling
 - Retry attempts: 3 per file (configurable)
 - Fallback strategies:
   - Alternative prompting
@@ -227,6 +258,8 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - ✅ Flow direction annotation showing typical data flow
 - ✅ Legend to explain diagram elements
 - ✅ Improved Mermaid diagrams with simplified styling for better rendering
+- ✅ Application description generation for codebase overview
+- ✅ Interactive HTML viewer with tabbed interface including Description tab
 - Parallel processing for faster analysis
 - Caching of analysis results
 
@@ -252,15 +285,19 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - **Entry Point**: A function or method where execution begins
 - **Graphviz**: A graph visualization software
 - **Mermaid**: A JavaScript-based diagramming and charting tool
+- **Application Description**: A comprehensive overview of the codebase generated by AI
 
 ### 8.2 References
 - OpenAI API Documentation
 - Graphviz Documentation
 - Mermaid Documentation
+- Markdown Documentation
 
 ### 8.3 Implementation Notes
 - The system falls back to generating only Mermaid diagrams when Graphviz is not installed
 - Configuration through environment variables allows for easy customization
 - API response parsing includes robust error handling to manage various potential failure modes
 - Environment variable configuration via .env file simplifies setup and customization
-- Visualization improvements include color-coding, legends, relationship labels, and HTML formatting for readability 
+- Visualization improvements include color-coding, legends, relationship labels, and HTML formatting for readability
+- Application descriptions are generated using the OPENAI_MODEL specified in the .env file
+- Markdown rendering includes extensions for improved code formatting 
