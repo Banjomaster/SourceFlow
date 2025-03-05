@@ -10,7 +10,7 @@ import json
 import argparse
 from sourceflow.core.visualizer import VisualizationGenerator
 
-def regenerate_diagrams(analysis_file, output_dir, max_nodes=None):
+def regenerate_diagrams(analysis_file, output_dir, max_nodes=None, generate_description=False):
     """
     Regenerate diagrams using the existing analysis data with optional node limiting.
     
@@ -18,6 +18,7 @@ def regenerate_diagrams(analysis_file, output_dir, max_nodes=None):
         analysis_file: Path to the analysis_data.json file
         output_dir: Directory where diagrams should be saved
         max_nodes: Optional limit on the number of nodes to include in diagrams
+        generate_description: Whether to generate an application description
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
@@ -35,6 +36,15 @@ def regenerate_diagrams(analysis_file, output_dir, max_nodes=None):
     
     # Create visualization generator
     generator = VisualizationGenerator(output_dir=output_dir)
+    
+    # Generate application description if requested
+    if generate_description:
+        print("Generating application description...")
+        description_file = generator.generate_application_description(analysis_file)
+        if description_file:
+            print(f"Application description saved to: {description_file}")
+        else:
+            print("Failed to generate application description")
     
     # Generate dependency diagram with max_nodes limit
     if max_nodes:
@@ -61,7 +71,9 @@ def regenerate_diagrams(analysis_file, output_dir, max_nodes=None):
     
     print("\nDiagram generation complete.")
     print(f"Dependency diagram: {dependency_files.get('mermaid')}")
-    print(f"Interactive viewer: {html_file}")
+    print(f"Structure diagram: {structure_files.get('mermaid')}")
+    print(f"Execution paths diagram: {execution_files.get('mermaid')}")
+    print(f"Custom viewer: {html_file}")
     
     return True
 
@@ -72,10 +84,12 @@ def main():
                         help="Directory to save generated diagrams")
     parser.add_argument("--max-nodes", "-m", type=int, default=None, 
                         help="Maximum number of nodes to include in dependency diagrams")
+    parser.add_argument("--generate-description", "-g", action="store_true",
+                        help="Generate an application description using OpenAI")
     
     args = parser.parse_args()
     
-    regenerate_diagrams(args.analysis_file, args.output_dir, args.max_nodes)
+    regenerate_diagrams(args.analysis_file, args.output_dir, args.max_nodes, args.generate_description)
 
 if __name__ == "__main__":
     main() 

@@ -16,9 +16,17 @@ import subprocess
 from dotenv import load_dotenv
 import re
 import webbrowser
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Try to import markdown for description rendering
+try:
+    import markdown
+    MARKDOWN_AVAILABLE = True
+except ImportError:
+    MARKDOWN_AVAILABLE = False
 
 class VisualizationGenerator:
     """
@@ -1204,7 +1212,7 @@ class VisualizationGenerator:
 
     def export_data(self, builder_data: Dict[str, Any], output_name: str = "analysis_data") -> str:
         """
-        Export the analysis data to a JSON file.
+        Export the builder data as a JSON file.
         
         Args:
             builder_data: Data from the RelationshipBuilder's get_summary method
@@ -1217,7 +1225,94 @@ class VisualizationGenerator:
         with open(output_path, 'w') as f:
             json.dump(builder_data, f, indent=2)
         return output_path
+    
+    def generate_application_description(self, analysis_file: str, output_name: str = "application_description") -> str:
+        """
+        Generate an application description from analysis data using OpenAI.
         
+        Args:
+            analysis_file (str): Path to the analysis_data.json file.
+            output_name (str, optional): Name for the output file. Defaults to "application_description".
+            
+        Returns:
+            str: Path to the generated description file, or empty string if generation failed.
+        """
+        try:
+            # Load environment variables for OpenAI API key
+            openai_api_key = os.environ.get('OPENAI_API_KEY')
+            if not openai_api_key:
+                print("Error: OPENAI_API_KEY not found in environment variables.")
+                return ""
+                
+            # Get OpenAI model from environment variables or use default
+            openai_model = os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo')
+            
+            # Load the analysis data
+            try:
+                with open(analysis_file, 'r') as f:
+                    analysis_data = json.load(f)
+            except Exception as e:
+                print(f"Error loading analysis data: {str(e)}")
+                return ""
+                
+            print(f"Generating application description using model: {openai_model}")
+            
+            # Format the prompt for OpenAI
+            prompt = """
+You are an expert code analyzer. Your task is to create a clear and concise application description based on the code analysis data provided. Focus on helping new developers understand the codebase. Your description should include:
+
+1. Purpose: What is the overall purpose of the application?
+2. Core Functionality: What are the main features or capabilities?
+3. Main Components: What are the key modules, classes, or files?
+4. Architecture: How is the application structured?
+5. Key Execution Flows: What are the main execution paths through the code?
+6. Implementation Focus Areas: What should new developers focus on first?
+
+Format your response in Markdown, with clear headings, bullet points where appropriate, and code references where helpful.
+"""
+
+            # Create the request to OpenAI API
+            import requests
+            
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {openai_api_key}"
+            }
+            
+            data = {
+                "model": openai_model,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": json.dumps(analysis_data, indent=2)}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2000
+            }
+            
+            # Make the request
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code != 200:
+                print(f"Error from OpenAI API: {response.text}")
+                return ""
+                
+            # Extract the description from the response
+            response_data = response.json()
+            description = response_data["choices"][0]["message"]["content"]
+            
+            # Save the description to a file
+            output_path = os.path.join(self.output_dir, f"{output_name}.md")
+            with open(output_path, 'w') as f:
+                f.write(description)
+                
+            print(f"Application description saved to {output_path}")
+            return output_path
+            
+        except Exception as e:
+            print(f"Error generating application description: {str(e)}")
+            return ""
+    
     def generate_html_viewer(self, builder_data: Dict[str, Any], output_name: str = "interactive_viewer") -> str:
         """
         Generates an interactive HTML viewer for all diagram types that allows
@@ -1367,314 +1462,547 @@ class VisualizationGenerator:
 
     def _generate_custom_viewer_html(self, builder_data: Dict[str, Any], functions_by_file: Dict[str, List[Dict[str, Any]]], file_names: Dict[str, str]) -> str:
         """
-        Generate a custom main viewer HTML file that links to all individual diagram HTML files.
-
-        Args:
-            builder_data: Data from the RelationshipBuilder's get_summary method
-            functions_by_file: Dictionary mapping file paths to lists of function dictionaries
-            file_names: Dictionary mapping file paths to base file names
-
-        Returns:
-            Path to the generated custom viewer HTML file
-        """
-        # Validate input data
-        if not isinstance(builder_data, dict):
-            builder_data = {}
-            print("Warning: builder_data is not a dictionary. Using empty dictionary instead.")
+        Generate a custom HTML viewer for the analysis results.
         
+        Args:
+            builder_data (Dict[str, Any]): Builder data containing analysis results.
+            functions_by_file (Dict[str, List[Dict[str, Any]]]): Functions organized by file.
+            file_names (Dict[str, str]): File name mapping.
+            
+        Returns:
+            str: Path to the generated HTML file.
+        """
+        # Verify input data
+        if not isinstance(builder_data, dict):
+            print(f"Warning: builder_data is not a dictionary. Type: {type(builder_data)}")
+            builder_data = {}
+            
         if not isinstance(functions_by_file, dict):
+            print(f"Warning: functions_by_file is not a dictionary. Type: {type(functions_by_file)}")
             functions_by_file = {}
-            print("Warning: functions_by_file is not a dictionary. Using empty dictionary instead.")
             
         if not isinstance(file_names, dict):
+            print(f"Warning: file_names is not a dictionary. Type: {type(file_names)}")
             file_names = {}
-            print("Warning: file_names is not a dictionary. Using empty dictionary instead.")
-            
-        # Ensure required keys exist in builder_data
+        
+        # Process execution paths
         execution_paths = builder_data.get("execution_paths", [])
         if not isinstance(execution_paths, list):
+            print(f"Warning: execution_paths is not a list. Type: {type(execution_paths)}")
             execution_paths = []
-            print("Warning: execution_paths is not a list. Using empty list instead.")
-            
-        # Process dependencies for visualization
-        dependencies = builder_data.get("dependencies", [])
-        if not dependencies:
-            print("Creating dependencies array from available data")
-            dependencies = []
-            
-            # First use file_dependencies explicitly defined
-            file_dependencies = builder_data.get("file_dependencies", {})
-            has_deps = False
-            
-            for source, targets in file_dependencies.items():
-                if targets:  # Only if there are actual dependencies
-                    has_deps = True
-                    for target in targets:
-                        dependencies.append({
-                            "source": source,
-                            "target": target,
-                            "description": f"This module imports and uses {os.path.basename(target)}"
-                        })
-            
-            # Always process function calls to add more dependencies, 
-            # rather than only when no dependencies are found
-            print("Adding dependencies from function calls...")
-            function_details = builder_data.get("function_details", {})
-            deps_map = {}  # source_file -> set of target_files
-            
-            for func_id, func_info in function_details.items():
-                if isinstance(func_info, dict) and ("file" in func_info or "file_path" in func_info) and "calls" in func_info:
-                    source_file = func_info.get("file", func_info.get("file_path", ""))
-                    if not source_file:
-                        continue
-                        
-                    if source_file not in deps_map:
-                        deps_map[source_file] = set()
-                    
-                    # Look at each call and see if it references another file
-                    for call in func_info.get("calls", []):
-                        target_file = None
-                        if isinstance(call, str):
-                            # If the call is a function name, look up its file
-                            if call in function_details:
-                                target_file = function_details[call].get("file", function_details[call].get("file_path", ""))
-                        elif isinstance(call, dict):
-                            # If the call is a dictionary, get the file directly
-                            target_file = call.get("file", call.get("file_path", ""))
-                        
-                        # Don't include self-references or empty targets
-                        if target_file and target_file != source_file:
-                            deps_map[source_file].add(target_file)
-            
-            # Convert the gathered dependencies to our standard format
-            deps_from_calls = 0
-            for source_file, target_files in deps_map.items():
-                for target_file in target_files:
-                    # Check if this dependency already exists
-                    already_exists = False
-                    for dep in dependencies:
-                        if dep.get("source") == source_file and dep.get("target") == target_file:
-                            already_exists = True
-                            break
-                    
-                    # Only add if not already in the dependencies
-                    if not already_exists:
-                        dependencies.append({
-                            "source": source_file,
-                            "target": target_file,
-                            "description": f"This module calls functions from {os.path.basename(target_file)}"
-                        })
-                        deps_from_calls += 1
-            
-            print(f"Added {deps_from_calls} additional dependencies from function calls")
-            
-            # Last resort: create a sample dependency
-            if not dependencies:
-                print("Adding sample dependency for demo")
-                # Find visualizer.py in the core directory
-                visualizer_file = None
-                test_file = None
-                
-                for file_path in functions_by_file:
-                    if "visualizer.py" in file_path and "core" in file_path:
-                        visualizer_file = file_path
-                    elif "test_visualizer_output.py" in file_path:
-                        test_file = file_path
-                
-                if test_file and visualizer_file:
-                    dependencies.append({
-                        "source": test_file,
-                        "target": visualizer_file,
-                        "description": f"This module imports and uses {os.path.basename(visualizer_file)}"
-                    })
-                    print("No dependencies found, added fallback test->visualizer dependency")
-            
-            # Store the created dependencies in builder_data
-            builder_data["dependencies"] = dependencies
         
-        if not isinstance(dependencies, list):
-            dependencies = []
-            print("Warning: dependencies is not a list. Using empty list instead.")
+        # Try to load application description if it exists
+        description_path = os.path.join(self.output_dir, "application_description.md")
+        description_html = ""
         
-        output_path = os.path.join(self.output_dir, "custom_viewer.html")
-
-        # HTML template for the custom viewer
+        try:
+            if os.path.exists(description_path):
+                with open(description_path, 'r') as f:
+                    description_content = f.read()
+                
+                # Try to convert markdown to HTML if markdown library is available
+                try:
+                    import markdown
+                    # Use an extended set of extensions for better formatting
+                    extensions = [
+                        'markdown.extensions.fenced_code',
+                        'markdown.extensions.codehilite',
+                        'markdown.extensions.tables',
+                        'markdown.extensions.nl2br',
+                        'markdown.extensions.sane_lists'
+                    ]
+                    
+                    # Process markdown with enhanced extensions
+                    description_html = markdown.markdown(
+                        description_content, 
+                        extensions=extensions,
+                        output_format='html5'
+                    )
+                    
+                    # Post-process the HTML to fix common rendering issues
+                    # Improve Architecture section formatting
+                    if "architecture" in description_html.lower():
+                        # Find the architecture section
+                        arch_start = description_html.lower().find("<h2>architecture</h2>")
+                        if arch_start > -1:
+                            # Look for the next h2 or end of document
+                            next_h2 = description_html.lower().find("<h2>", arch_start + 1)
+                            arch_end = next_h2 if next_h2 > -1 else len(description_html)
+                            
+                            # Extract architecture section
+                            arch_section = description_html[arch_start:arch_end]
+                            
+                            # Highlight UI Layer, Business Logic Layer, and Data Layer
+                            for layer in ["UI Layer", "Business Logic Layer", "Data Layer"]:
+                                # Handle both code blocks and plain text
+                                patterns = [
+                                    f"<code>{layer}</code>", 
+                                    f"<strong>{layer}</strong>",
+                                    f"{layer}:"  # Handle format like "UI Layer: Contains components..."
+                                ]
+                                replacement = f'<span class="layer-highlight">{layer}</span>'
+                                
+                                for pattern in patterns:
+                                    arch_section = arch_section.replace(pattern, replacement)
+                            
+                            # Replace the original architecture section
+                            description_html = description_html[:arch_start] + arch_section + description_html[arch_end:]
+                    
+                    # Ensure nested lists are properly styled
+                    description_html = description_html.replace('<ul>\n<li>', '<ul class="main-list">\n<li>')
+                    
+                    # Try to fix any common markdown issues with lists
+                    description_html = description_html.replace('<p>- ', '<p>• ')
+                    
+                    # Wrap with a div for styling
+                    description_html = f'<div class="markdown-content">{description_html}</div>'
+                    
+                except ImportError:
+                    # If markdown library is not available, display raw markdown
+                    description_html = f"<pre>{description_content}</pre>"
+            else:
+                description_html = """
+                <div class="alert alert-info">
+                    <p>No application description available.</p>
+                    <p>Generate one by running:</p>
+                    <pre>python -m sourceflow analyze --path /path/to/your/code --generate-description</pre>
+                </div>
+                """
+        except Exception as e:
+            description_html = f"<div class='alert alert-danger'>Error loading description: {str(e)}</div>"
+                
+        # Generate HTML content for structure, dependencies, and execution paths
+        structure_html = self._generate_structure_html(functions_by_file)
+        dependencies_html = self._generate_dependencies_html(builder_data.get("dependencies", []), functions_by_file)
+        execution_paths_html = self._generate_execution_paths_html(execution_paths)
+        
+        # Format HTML with all content
+        try:
+            custom_viewer_path = os.path.join(self.output_dir, "custom_viewer.html")
+            
+            # Use the formatted HTML with all sections
+            formatted_html = self._format_html_template(
+                structure_html=structure_html,
+                dependencies_html=dependencies_html,
+                execution_paths_html=execution_paths_html,
+                description_html=description_html
+            )
+            
+            with open(custom_viewer_path, 'w') as f:
+                f.write(formatted_html)
+                
+            print(f"Custom viewer generated at {custom_viewer_path}")
+            return custom_viewer_path
+        except Exception as e:
+            print(f"Error generating custom viewer: {str(e)}")
+            return ""
+    
+    def _format_html_template(self, structure_html, dependencies_html, execution_paths_html, description_html):
+        """Format the HTML template with the generated content."""
+        # Create a simplified template with placeholders
         html_template = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Source Flow Custom Viewer</title>
+    <title>Code Analysis Viewer</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             line-height: 1.6;
             color: #333;
             margin: 0;
             padding: 0;
-            background-color: #f9f9f9;
+            background-color: #f5f5f5;
         }
+        
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
+        
         h1 {
-            color: #2c3e50;
-            margin-bottom: 30px;
+            color: #333;
+            margin-bottom: 20px;
             padding-bottom: 10px;
-            border-bottom: 2px solid #eee;
-        }
-        h3 {
-            margin-top: 30px;
-            margin-bottom: 10px;
-            color: #34495e;
-            padding: 8px 0;
             border-bottom: 1px solid #ddd;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            text-align: center;
         }
-        h3:after {
-            content: "+";
-            font-size: 18px;
-            color: #aaa;
+        
+        .search-container {
+            margin-bottom: 20px;
+            text-align: center;
         }
-        h3.expanded:after {
-            content: "-";
+        
+        #search {
+            padding: 8px 15px;
+            width: 60%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
         }
-        .module-content {
-            display: none;
-            padding: 0 15px;
-            margin-bottom: 25px;
-        }
-        .module-description {
-            margin-bottom: 15px;
-            color: #7f8c8d;
-            font-style: italic;
-        }
-        .function {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: white;
-            border-left: 1px solid #999;
-            border-radius: 0 4px 4px 0;
-        }
-        .function.entry-point {
-            border-left: 5px solid #5ca75c;
-            background-color: #d4f1d4;
-        }
-        .function.special-method {
-            border-left: 5px solid #4d8bc9;
-            background-color: #e6f3ff;
-        }
-        .function.private-helper {
-            border-left: 1px dashed #999;
-        }
-        .function-name {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .function-description {
-            font-size: 14px;
-            color: #555;
-        }
+        
         .tabs {
             display: flex;
             margin-bottom: 20px;
             border-bottom: 1px solid #ddd;
         }
+        
         .tab {
             padding: 10px 20px;
             cursor: pointer;
-            background-color: #f5f5f5;
+            background-color: #f9f9f9;
             border: 1px solid #ddd;
             border-bottom: none;
-            border-radius: 4px 4px 0 0;
             margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+            font-weight: 500;
         }
+        
+        .tab:hover {
+            background-color: #e9e9e9;
+        }
+        
         .tab.active {
-            background-color: white;
-            border-bottom: 1px solid white;
-            position: relative;
-            top: 1px;
+            background-color: #fff;
+            border-bottom-color: #fff;
+            z-index: 1;
         }
+        
         .tab-content {
             display: none;
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-top: none;
         }
+        
         .tab-content.active {
             display: block;
         }
-        .legend {
-            display: flex;
-            margin: 20px 0;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: center;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-right: 20px;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-        }
-        .search {
-            margin: 20px 0;
-        }
-        .search input {
-            padding: 8px;
-            width: 300px;
-            border: 1px solid #ddd;
+        
+        .module-header {
+            background-color: #e6f3ff;
+            padding: 10px 15px;
+            margin-top: 25px;
+            margin-bottom: 5px;
             border-radius: 4px;
-        }
-        .highlight {
-            background-color: yellow;
-        }
-        .summary-box {
-            background-color: #f8f8f8;
+            cursor: pointer;
             border-left: 4px solid #4d8bc9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .module-header:after {
+            content: '+';
+            font-size: 20px;
+            color: #4d8bc9;
+        }
+        
+        .module-header.expanded:after {
+            content: '-';
+        }
+        
+        .module-content {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 0 0 4px 4px;
+            margin-bottom: 10px;
+        }
+        
+        .module-description {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .function {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #999;
+            border-radius: 4px;
+            background-color: white;
+        }
+        
+        .function.entry-point {
+            background-color: #d4f1d4;
+            border: 2px solid #5ca75c;
+        }
+        
+        .function.special-method {
+            background-color: #e6f3ff;
+            border: 1px solid #4d8bc9;
+        }
+        
+        .function.private-helper {
+            border: 1px dashed #999;
+        }
+        
+        .function-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .function-description {
+            font-size: 0.9em;
+            color: #555;
+        }
+        
+        .summary-box {
+            background-color: #e6f3ff;
             padding: 15px;
             margin-bottom: 20px;
-            border-radius: 0 4px 4px 0;
+            border-radius: 4px;
+            border-left: 4px solid #4d8bc9;
         }
+        
         .summary-title {
             font-weight: bold;
+            font-size: 1.1em;
             margin-bottom: 10px;
             color: #333;
         }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        
+        .visualize-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
         .visualize-link {
+            display: inline-block;
+            padding: 8px 15px;
             background-color: #4d8bc9;
             color: white;
-            padding: 5px 15px;
-            border-radius: 4px;
             text-decoration: none;
-            margin-left: 20px;
-            font-size: 14px;
+            border-radius: 4px;
+            margin-top: 10px;
         }
+        
         .visualize-link:hover {
-            background-color: #3a6d99;
+            background-color: #3a6999;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .alert-info {
+            background-color: #e6f3ff;
+            border-left: 4px solid #4d8bc9;
+        }
+        
+        .alert-danger {
+            background-color: #ffe6e6;
+            border-left: 4px solid #c95c5c;
+        }
+        
+        /* Code formatting for markdown content */
+        code {
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            color: #e83e8c;
+            white-space: nowrap;
+        }
+        
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        pre code {
+            white-space: pre;
+            padding: 0;
+            background-color: transparent;
+            border: none;
+            display: block;
+        }
+        
+        /* Enhanced markdown content styling */
+        #description h1, #description h2, #description h3, 
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            color: #333;
+        }
+        
+        #description h1, .markdown-content h1 {
+            font-size: 1.8em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.3em;
+        }
+        
+        #description h2, .markdown-content h2 {
+            font-size: 1.5em;
+        }
+        
+        #description h3, .markdown-content h3 {
+            font-size: 1.2em;
+        }
+        
+        #description ul, #description ol,
+        .markdown-content ul, .markdown-content ol {
+            margin-top: 0.5em;
+            margin-bottom: 1em;
+            padding-left: 2em;
+        }
+        
+        #description li, .markdown-content li {
+            margin-bottom: 0.3em;
+        }
+        
+        #description ul ul, #description ol ol, #description ul ol, #description ol ul,
+        .markdown-content ul ul, .markdown-content ol ol, .markdown-content ul ol, .markdown-content ol ul {
+            margin-top: 0.3em;
+            margin-bottom: 0.5em;
+        }
+        
+        #description p, .markdown-content p {
+            margin-bottom: 1em;
+            line-height: 1.6;
+        }
+        
+        #description strong, .markdown-content strong {
+            font-weight: 600;
+            color: #444;
+        }
+        
+        /* Layer highlighting in architecture section */
+        #description strong em, #description em strong,
+        .markdown-content strong em, .markdown-content em strong {
+            font-style: normal;
+            font-weight: 600;
+            color: #d73a49;
+            background-color: #fff5f7;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        /* Special styling for architecture layers */
+        .markdown-content p strong code {
+            color: #d73a49;
+            background-color: #fff5f7;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        /* Custom highlight for architecture layers */
+        .layer-highlight {
+            font-weight: bold;
+            color: #d73a49;
+            background-color: #fff5f7;
+            padding: 3px 6px;
+            border-radius: 3px;
+            border-left: 3px solid #d73a49;
+            display: inline-block;
+            margin: 2px 0;
+        }
+        
+        /* List styling */
+        .markdown-content ul.main-list {
+            list-style-type: disc;
+            margin-left: 0;
+            padding-left: 1.5em;
+        }
+        
+        .markdown-content ul.main-list li {
+            margin-bottom: 0.5em;
+        }
+        
+        .markdown-content ul.main-list ul {
+            list-style-type: circle;
+            margin-top: 0.3em;
+            margin-bottom: 0.3em;
+        }
+        
+        .markdown-content ul.main-list ul li {
+            margin-bottom: 0.2em;
+        }
+        
+        /* Improved paragraph and bullet styling */
+        .markdown-content p {
+            margin-bottom: 1em;
+        }
+        
+        /* Bullet character styling */
+        .markdown-content p:has(• ) {
+            margin-left: 1.5em;
+            text-indent: -1em;
+        }
+        
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                border: 1px solid #ddd;
+                border-radius: 0;
+                margin-right: 0;
+                margin-bottom: 2px;
+            }
+            
+            .tab.active {
+                border-bottom: 1px solid #ddd;
+            }
+            
+            .tab-content {
+                border: 1px solid #ddd;
+            }
+            
+            #search {
+                width: 90%;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Source Flow Analysis</h1>
+        <h1>Code Analysis Viewer</h1>
         
-        <div class="search">
-            <input type="text" id="search-input" placeholder="Search for functions, modules, or descriptions...">
+        <div class="search-container">
+            <input type="text" id="search" placeholder="Search for modules or functions..." oninput="filterContent()">
         </div>
-
+        
         <div class="tabs">
             <div class="tab active" data-target="structure">Code Structure</div>
             <div class="tab" data-target="dependencies">Dependencies</div>
             <div class="tab" data-target="execution">Execution Paths</div>
+            <div class="tab" data-target="description">Description</div>
         </div>
-
+        
         <div id="structure" class="tab-content active">
             <div class="summary-box">
                 <div class="summary-title">Code Structure Overview</div>
@@ -1698,12 +2026,269 @@ class VisualizationGenerator:
                     <div class="legend-color" style="background-color: white; border: 1px dashed #999;"></div>
                     <span>Private Helper</span>
                 </div>
-                <a href="./code_structure_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
             </div>
-"""
 
-        # Add code structure content by file
-        if functions_by_file:
+            <div class="visualize-container">
+                <a href="code_structure_diagram.html" class="visualize-link">View Full Diagram</a>
+            </div>
+            
+            STRUCTURE_CONTENT
+        </div>
+
+        <div id="dependencies" class="tab-content">
+            <div class="summary-box">
+                <div class="summary-title">Dependencies Overview</div>
+                <p>This view illustrates the relationships between modules in the codebase, showing how files depend on one another. The project follows a modular architecture with clearly defined dependencies between entry point files and supporting Python modules. This hierarchy helps understand how changes in one module might affect others and identifies the core components of the application.</p>
+            </div>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d4f1d4; border: 1px solid #5ca75c;"></div>
+                    <span>Entry Point File</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e6f3ff; border: 1px solid #4d8bc9;"></div>
+                    <span>Python Module</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #fff7e6; border: 1px solid #d9b38c;"></div>
+                    <span>Config File</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="border: 1px dashed #999; position: relative;">
+                        <div style="position: absolute; top: 50%; left: -10px; width: 20px; height: 1px; background: #999;"></div>
+                    </div>
+                    <span>Dependency</span>
+                </div>
+            </div>
+
+            <div class="visualize-container">
+                <a href="dependencies_diagram.html" class="visualize-link">View Full Diagram</a>
+            </div>
+            
+            DEPENDENCIES_CONTENT
+        </div>
+
+        <div id="execution" class="tab-content">
+            <div class="summary-box">
+                <div class="summary-title">Execution Paths Overview</div>
+                <p>This view shows the major execution paths, starting from entry points and illustrating how they flow through different functions and modules. Understanding these paths helps with debugging and feature development by clarifying the sequence of operations for main processes. These paths represent the dynamic behavior of the application during runtime execution.</p>
+            </div>
+            
+            <div class="visualize-container">
+                <a href="execution_paths_diagram.html" class="visualize-link">View Full Diagram</a>
+            </div>
+            
+            EXECUTION_PATHS_CONTENT
+        </div>
+
+        <div id="description" class="tab-content">
+            <div class="summary-box">
+                <div class="summary-title">Application Description</div>
+                <p>This comprehensive overview of the application is designed to help new developers understand the codebase quickly. It includes information about the application's purpose, core functionality, main components, architecture, key execution flows, and areas new developers should focus on first.</p>
+            </div>
+            
+            DESCRIPTION_CONTENT
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tab switching functionality
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const target = this.getAttribute('data-target');
+                    
+                    // Hide all tab contents
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Deactivate all tabs
+                    tabs.forEach(t => {
+                        t.classList.remove('active');
+                    });
+                    
+                    // Activate the clicked tab and its content
+                    this.classList.add('active');
+                    document.getElementById(target).classList.add('active');
+                });
+            });
+            
+            // Module expansion functionality
+            const moduleHeaders = document.querySelectorAll('.module-header');
+            moduleHeaders.forEach(header => {
+                header.addEventListener('click', function() {
+                    this.classList.toggle('expanded');
+                    const contentId = this.getAttribute('data-module') + '-content';
+                    const content = document.getElementById(contentId);
+                    if (content) {
+                        content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                    }
+                });
+            });
+        });
+        
+        function filterContent() {
+            const searchValue = document.getElementById('search').value.toLowerCase();
+            
+            // Filter module headers and their content
+            const moduleHeaders = document.querySelectorAll('.module-header');
+            moduleHeaders.forEach(header => {
+                const moduleText = header.textContent.toLowerCase();
+                const moduleId = header.getAttribute('data-module');
+                const moduleContent = document.getElementById(moduleId + '-content');
+                
+                let functionMatches = false;
+                
+                // Check if any functions within this module match
+                if (moduleContent) {
+                    const functions = moduleContent.querySelectorAll('.function');
+                    functions.forEach(func => {
+                        const functionText = func.textContent.toLowerCase();
+                        if (functionText.includes(searchValue)) {
+                            functionMatches = true;
+                            func.style.display = 'block';
+                        } else {
+                            func.style.display = 'none';
+                        }
+                    });
+                }
+                
+                // Show/hide module based on search results
+                if (moduleText.includes(searchValue) || functionMatches) {
+                    header.style.display = 'flex';
+                    if (searchValue && functionMatches) {
+                        // Expand module content if functions match during search
+                        header.classList.add('expanded');
+                        if (moduleContent) {
+                            moduleContent.style.display = 'block';
+                        }
+                    }
+                } else {
+                    header.style.display = 'none';
+                    if (moduleContent) {
+                        moduleContent.style.display = 'none';
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+        # Replace placeholders with actual content
+        html_template = html_template.replace("STRUCTURE_CONTENT", structure_html)
+        html_template = html_template.replace("DEPENDENCIES_CONTENT", dependencies_html)
+        html_template = html_template.replace("EXECUTION_PATHS_CONTENT", execution_paths_html)
+        html_template = html_template.replace("DESCRIPTION_CONTENT", description_html)
+        
+        return html_template
+    
+    def _generate_execution_paths_html(self, execution_paths):
+        """
+        Generate HTML content for the execution paths tab.
+        
+        Args:
+            execution_paths: List of execution path dictionaries
+            
+        Returns:
+            str: HTML content for the execution paths
+        """
+        html = ""
+        
+        # Add execution paths content
+        try:
+            for i, path in enumerate(execution_paths):
+                try:
+                    if isinstance(path, list):
+                        # Handle the case where path is a list
+                        if path and len(path) > 0:
+                            first_step = path[0]
+                            if isinstance(first_step, dict):
+                                entry_name = first_step.get("function_name", "Unknown")
+                                entry_file = first_step.get("file", "")
+                            else:
+                                entry_name = str(first_step)
+                                entry_file = ""
+                        else:
+                            entry_name = "Unknown"
+                            entry_file = ""
+                        # Always define steps for the list case
+                        steps = path[1:] if path and len(path) > 1 else []
+                    else:
+                        # Handle the case where path is a dictionary
+                        entry_point = path.get("entry_point", {})
+                        entry_name = entry_point.get("name", "Unknown")
+                        entry_file = entry_point.get("file", "")
+                        steps = path.get("steps", [])
+
+                    file_name = os.path.basename(entry_file) if entry_file else "Unknown"
+                    path_id = f"path{i+1}"
+
+                    html += f"""
+            <h3 data-module="{path_id}" class="module-header">Execution Path {i+1}: {entry_name}</h3>
+            <div class="module-content" id="{path_id}-content">
+                <div class="function entry-point">
+                    <div class="function-name">{entry_name} ({file_name})</div>
+                    <div class="function-description">Execution path starting from {entry_name}</div>
+                </div>
+                """
+
+                    # Add execution steps if available
+                    if steps:
+                        html += """
+                <div class="call-steps">
+                """
+                        for step_idx, step in enumerate(steps):
+                            try:
+                                if isinstance(step, dict):
+                                    step_name = step.get("function_name", f"step {step_idx+1}")
+                                    step_description = step.get("description", "Execution step")
+                                else:
+                                    step_name = str(step)
+                                    step_description = "Execution step"
+                                
+                                indent = 20 * (step_idx + 1)
+                                
+                                html += f"""
+                    <div class="function" style="margin-left: {indent}px;">
+                        <div class="function-name">step {step_idx+1}: {step_name}</div>
+                        <div class="function-description">{step_description}</div>
+                    </div>
+                """
+                            except Exception as e:
+                                print(f"Error processing execution step {step_idx} in path {i+1}: {str(e)}")
+
+                        html += """
+                </div>
+                """
+
+                    html += """
+            </div>
+            """
+                except Exception as e:
+                    print(f"Error processing execution path {i+1}: {str(e)}")
+                    html += f"""
+            <h3 data-module="path-error-{i+1}" class="module-header">Execution Path {i+1}: Error</h3>
+            <div class="module-content" id="path-error-{i+1}-content">
+                <div class="module-description">An error occurred while processing this execution path: {str(e)}</div>
+            </div>
+            """
+        except Exception as e:
+            print(f"Error processing execution paths: {str(e)}")
+            
+        return html
+
+    def _generate_structure_html(self, functions_by_file):
+        """Generate HTML for the code structure section."""
+        structure_html = ""
+        
+        if not functions_by_file:
+            return "<div class='alert alert-info'>No code structure information available.</div>"
+            
+        try:
             # Organize files by directory for better structure
             root_dir = os.path.commonpath(list(functions_by_file.keys()))
             
@@ -1730,7 +2315,7 @@ class VisualizationGenerator:
                 
                 # Add directory header if it's not root
                 if len(sorted_dirs) > 1:
-                    html_template += f"""
+                    structure_html += f"""
             <div class="directory-header">{dir_title}</div>
             """
                 
@@ -1759,7 +2344,7 @@ class VisualizationGenerator:
                         # But keep the full path in the id for uniqueness
                         display_name = file_name
                                 
-                        html_template += f"""
+                        structure_html += f"""
             <!-- {rel_path} Module -->
             <h3 data-module="{module_id}" class="module-header">{display_name}</h3>
             <div class="module-content" id="{module_id}-content">
@@ -1781,43 +2366,33 @@ class VisualizationGenerator:
                             elif name.startswith("__") and name.endswith("__"):
                                 function_class = " special-method"
                             
-                            html_template += f"""
+                            structure_html += f"""
                 <div class="function{function_class}">
                     <div class="function-name">{name}</div>
                     <div class="function-description">{description}</div>
                 </div>
                 """
                                 
-                        html_template += """
+                        structure_html += """
             </div>
             """
                     except Exception as e:
-                        print(f"Error processing file {file_path}: {str(e)}")
-
-        # Add dependencies tab
-        html_template += """
-        </div>
-        
-        <div id="dependencies" class="tab-content">
-            <div class="summary-box">
-                <div class="summary-title">Dependencies Overview</div>
-                <p>This view illustrates the relationships between modules in the codebase, showing how files depend on one another. The project follows a modular architecture with clearly defined dependencies between entry point files and supporting Python modules. This hierarchy helps understand how changes in one module might affect others and identifies the core components of the application.</p>
-            </div>
-            
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #d4f1d4; border: 1px solid #5ca75c;"></div>
-                    <span>Entry Point File</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #e6f3ff; border: 1px solid #4d8bc9;"></div>
-                    <span>Python Module</span>
-                </div>
-                <a href="./dependencies_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
-            </div>
+                        structure_html += f"""
+            <div class="alert alert-danger">Error processing file {file_path}: {str(e)}</div>
             """
-
-        # Add dependency information for each file
+                        
+        except Exception as e:
+            structure_html = f"<div class='alert alert-danger'>Error generating structure HTML: {str(e)}</div>"
+            
+        return structure_html
+        
+    def _generate_dependencies_html(self, dependencies, functions_by_file):
+        """Generate HTML for the dependencies section."""
+        dependencies_html = ""
+        
+        if not dependencies:
+            return "<div class='alert alert-info'>No dependency information available.</div>"
+            
         try:
             file_descriptions = {}
             root_dir = os.path.commonpath(list(functions_by_file.keys())) if functions_by_file else ""
@@ -1834,10 +2409,6 @@ class VisualizationGenerator:
                         break
                 
                 file_descriptions[file_path] = description
-            
-            # Use file_dependencies if no dependencies array
-            if not dependencies:
-                print("Warning: No dependencies found for dependencies tab")
             
             # Group dependencies by source file to avoid duplicates
             dependencies_by_source = {}
@@ -1867,9 +2438,8 @@ class VisualizationGenerator:
                                 "target": target,
                                 "description": description or f"This module depends on {os.path.basename(target)}"
                             })
-
+            
             # Create more organized IDs for the dependencies tab
-            # Similar to the structure in the gold standard
             processed_modules = set()  # Track processed modules to avoid duplicates
             
             # Helper function to get module ID for dependencies tab
@@ -1911,7 +2481,7 @@ class VisualizationGenerator:
                 processed_modules.add(module_id)
                 description = file_descriptions.get(file_path, "This is a module in the codebase.")
                 
-                html_template += f"""
+                dependencies_html += f"""
             <h3 data-module="{module_id}" class="module-header">{display_name}</h3>
             <div class="module-content" id="{module_id}-content">
                 <div class="module-description">{description}</div>
@@ -1925,236 +2495,28 @@ class VisualizationGenerator:
                         target_name = os.path.basename(target)
                         dep_description = dep["description"]
                         
-                        html_template += f"""
+                        dependencies_html += f"""
                 <div class="function">
                     <div class="function-name">Imports: {target_name}</div>
                     <div class="function-description">{dep_description}</div>
                 </div>
                 """
                 else:
-                    html_template += """
+                    dependencies_html += """
                 <div class="function">
                     <div class="function-name">No Dependencies</div>
                     <div class="function-description">This module does not depend on any other modules</div>
                 </div>
                 """
+
+                dependencies_html += """
+            </div>
+            """
                 
-                html_template += """
-            </div>
-            """
         except Exception as e:
-            print(f"Error processing dependencies: {str(e)}")
-
-        # Add execution paths tab
-        html_template += """
-        </div>
-        
-        <div id="execution" class="tab-content">
-            <div class="summary-box">
-                <div class="summary-title">Execution Paths Overview</div>
-                <p>This view shows the main execution flows through the codebase, starting from entry points and following through the functions they call. It helps understand the typical runtime behavior of the application and how components interact.</p>
-            </div>
+            dependencies_html = f"<div class='alert alert-danger'>Error generating dependencies HTML: {str(e)}</div>"
             
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #d4f1d4; border: 2px solid #5ca75c;"></div>
-                    <span>Entry Point</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="border: 1px solid #999; position: relative;">
-                        <div style="position: absolute; top: 50%; left: 100%; width: 10px; height: 1px; background: #999;"></div>
-                    </div>
-                    <span>Execution Flow</span>
-                </div>
-                <a href="./execution_paths_diagram.html" target="_blank" class="visualize-link">Visualize Full Diagram</a>
-            </div>
-            """
-
-        # Add execution paths content
-        try:
-            for i, path in enumerate(execution_paths):
-                try:
-                    if isinstance(path, list):
-                        # Handle the case where path is a list
-                        if path and len(path) > 0:
-                            first_step = path[0]
-                            if isinstance(first_step, dict):
-                                entry_name = first_step.get("function_name", "Unknown")
-                                entry_file = first_step.get("file", "")
-                            else:
-                                entry_name = str(first_step)
-                                entry_file = ""
-                        else:
-                            entry_name = "Unknown"
-                            entry_file = ""
-                        # Always define steps for the list case
-                        steps = path[1:] if path and len(path) > 1 else []
-                    else:
-                        # Handle the case where path is a dictionary
-                        entry_point = path.get("entry_point", {})
-                        entry_name = entry_point.get("name", "Unknown")
-                        entry_file = entry_point.get("file", "")
-                        steps = path.get("steps", [])
-
-                    file_name = os.path.basename(entry_file) if entry_file else "Unknown"
-                    path_id = f"path{i+1}"
-
-                    html_template += f"""
-            <h3 data-module="{path_id}" class="module-header">Execution Path {i+1}: {entry_name}</h3>
-            <div class="module-content" id="{path_id}-content">
-                <div class="function entry-point">
-                    <div class="function-name">{entry_name} ({file_name})</div>
-                    <div class="function-description">Execution path starting from {entry_name}</div>
-                </div>
-                """
-
-                    # Add execution steps if available
-                    if steps:
-                        html_template += """
-                <div class="call-steps">
-                """
-                        for step_idx, step in enumerate(steps):
-                            try:
-                                if isinstance(step, dict):
-                                    step_name = step.get("function_name", f"step {step_idx+1}")
-                                    step_description = step.get("description", "Execution step")
-                                else:
-                                    step_name = str(step)
-                                    step_description = "Execution step"
-                                
-                                indent = 20 * (step_idx + 1)
-                                
-                                html_template += f"""
-                    <div class="function" style="margin-left: {indent}px;">
-                        <div class="function-name">step {step_idx+1}: {step_name}</div>
-                        <div class="function-description">{step_description}</div>
-                    </div>
-                    """
-                            except Exception as e:
-                                print(f"Error processing execution step {step_idx} in path {i+1}: {str(e)}")
-                        
-                        html_template += """
-                </div>
-                """
-
-                    html_template += """
-            </div>
-            """
-                except Exception as e:
-                    print(f"Error processing execution path {i+1}: {str(e)}")
-                    html_template += f"""
-            <h3 data-module="path-error-{i+1}" class="module-header">Execution Path {i+1}: Error</h3>
-            <div class="module-content" id="path-error-{i+1}-content">
-                <div class="module-description">An error occurred while processing this execution path: {str(e)}</div>
-            </div>
-            """
-        except Exception as e:
-            print(f"Error processing execution paths: {str(e)}")
-
-        # Complete the HTML template
-        html_template += """
-        </div>
-    </div>
-
-    <script>
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs and content
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                
-                // Add active class to clicked tab and corresponding content
-                tab.classList.add('active');
-                const target = tab.getAttribute('data-target');
-                document.getElementById(target).classList.add('active');
-            });
-        });
-        
-        // Initialize all module content elements to be hidden
-        document.querySelectorAll('.module-content').forEach(content => {
-            content.style.display = 'none';
-        });
-        
-        // Module expansion
-        document.querySelectorAll('h3[data-module]').forEach(header => {
-            header.addEventListener('click', () => {
-                header.classList.toggle('expanded');
-                const moduleId = header.getAttribute('data-module') + '-content';
-                const content = document.getElementById(moduleId);
-                if (content) {
-                    // Check computed style for display property rather than inline style
-                    const currentDisplay = window.getComputedStyle(content).display;
-                    content.style.display = (currentDisplay === 'none') ? 'block' : 'none';
-                }
-            });
-        });
-        
-        // Auto-expand the first module in each tab for better UX
-        document.querySelectorAll('.tab-content').forEach(tabContent => {
-            const firstHeader = tabContent.querySelector('h3[data-module]');
-            if (firstHeader) {
-                firstHeader.click(); // Simulate click to expand
-            }
-        });
-        
-        // Search functionality
-        const searchInput = document.getElementById('search-input');
-        searchInput.addEventListener('input', () => {
-            const searchTerm = searchInput.value.toLowerCase();
-            
-            // Reset highlights
-            document.querySelectorAll('.highlight').forEach(el => {
-                el.outerHTML = el.innerHTML;
-            });
-            
-            if (searchTerm.length < 2) return;
-            
-            // Search in function names, descriptions, and module names
-            document.querySelectorAll('.function-name, .function-description, h3[data-module]').forEach(el => {
-                const text = el.textContent.toLowerCase();
-                if (text.includes(searchTerm)) {
-                    // Highlight the element
-                    const parent = el.closest('.function') || el;
-                    parent.scrollIntoView();
-                    
-                    // If it's inside a collapsed module, expand it
-                    if (el.closest('.module-content')) {
-                        const moduleId = el.closest('.module-content').id;
-                        const header = document.querySelector(`h3[data-module="${moduleId.replace('-content', '')}"]`);
-                        if (header && !header.classList.contains('expanded')) {
-                            header.click();
-                        }
-                    }
-                    
-                    // Highlight the matching text
-                    el.innerHTML = el.innerHTML.replace(
-                        new RegExp(searchTerm, 'gi'), 
-                        match => '<span class="highlight">' + match + '</span>'
-                    );
-                }
-            });
-        });
-    </script>
-</body>
-</html>"""
-
-        # Save the HTML file
-        try:
-            # Ensure output directory exists
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            with open(output_path, 'w') as f:
-                f.write(html_template)
-            print(f"Successfully generated custom viewer HTML at: {output_path}")
-        except IOError as e:
-            print(f"Error saving custom viewer HTML: {str(e)}")
-            return None
-        except Exception as e:
-            print(f"Unexpected error generating custom viewer HTML: {str(e)}")
-            return None
-
-        return output_path
+        return dependencies_html
 
 class Visualizer:
     """
@@ -2163,440 +2525,18 @@ class Visualizer:
     
     def __init__(self, codebase=None, output_dir="./output"):
         """
-        Initialize the Visualizer.
+        Initialize the visualizer.
         
         Args:
-            codebase: The CodebaseAnalyzer object containing analyzed codebase data
-            output_dir: The directory to save visualizations to
+            codebase: The codebase to visualize
+            output_dir: The output directory for visualization artifacts
         """
         self.codebase = codebase
         self.output_dir = output_dir
         
-        # Create the output directory if it doesn't exist
-        os.makedirs(self.output_dir, exist_ok=True)
-    
-    def generate_html_visualization(self, structure_content, dependencies_content, execution_content):
-        """
-        Generate an HTML visualization of the codebase using the provided mermaid diagrams.
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
         
-        Args:
-            structure_content: The mermaid content for the structure diagram
-            dependencies_content: The mermaid content for the dependencies diagram
-            execution_content: The mermaid content for the execution paths diagram
-            
-        Returns:
-            str: The HTML content as a string
-        """
-        # Create a super simple HTML template that's guaranteed to work
-        html_template = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Source Flow Diagrams</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        h1, h2 {
-            color: #333;
-        }
-        h2 {
-            margin-top: 40px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .diagram-container {
-            margin-top: 20px;
-            overflow: auto;
-        }
-        .error-info {
-            color: red;
-            font-family: monospace;
-            white-space: pre-wrap;
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #fff0f0;
-            border: 1px solid #ffdddd;
-            border-radius: 4px;
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Source Flow Analysis</h1>
-        
-        <h2>Code Structure</h2>
-        <div class="diagram-container">
-            <div class="mermaid">
-STRUCTURE_CONTENT_PLACEHOLDER
-            </div>
-            <div id="structure-error" class="error-info"></div>
-        </div>
-        
-        <h2>Dependencies</h2>
-        <div class="diagram-container">
-            <div class="mermaid">
-DEPENDENCIES_CONTENT_PLACEHOLDER
-            </div>
-            <div id="dependencies-error" class="error-info"></div>
-        </div>
-        
-        <h2>Execution Paths</h2>
-        <div class="diagram-container">
-            <div class="mermaid">
-EXECUTION_CONTENT_PLACEHOLDER
-            </div>
-            <div id="execution-error" class="error-info"></div>
-        </div>
-    </div>
-    
-    <script>
-        // Configure Mermaid with more detailed settings
-        function configureMermaidByDiagramType() {{
-            const diagramText = document.querySelector('.mermaid').textContent;
-            const config = {{
-                startOnLoad: true,
-                theme: 'default',
-                securityLevel: 'loose',
-                maxTextSize: 500000, // Increased from default of ~60000 to allow larger diagrams
-                flowchart: {{
-                    useMaxWidth: false,
-                    htmlLabels: true,
-                    curve: 'basis',
-                    rankSpacing: 200,       // Dramatically increased spacing between ranks for better enclosure
-                    nodeSpacing: 150,       // Dramatically increased spacing between nodes
-                    padding: 80,            // Significantly increased padding around subgraphs
-                    ranker: 'longest-path',  // More space-efficient layout for complex diagrams
-                    diagramPadding: 30,     // Add padding around the entire diagram
-                    labelPosition: 'center', // Try to force center positioning of labels
-                    defaultRenderer: 'dagre-wrapper', // Ensure consistent rendering
-                }},
-                themeVariables: {{
-                    fontSize: '14px',
-                    fontFamily: 'Arial, sans-serif',
-                    primaryColor: '#e6f3ff',
-                    primaryTextColor: '#333',
-                    primaryBorderColor: '#4d8bc9',
-                    lineColor: '#666',
-                    secondaryColor: '#f9f9f9',
-                    tertiaryColor: '#f5f5f5'
-                }}
-            }};
-            
-            // Detect if diagram has many subgraphs (complex structure)
-            const subgraphCount = (diagramText.match(/subgraph/g) || []).length;
-            
-            // Detect if diagram has many nodes
-            const nodeCount = (diagramText.match(/\\[.*?\\]/g) || []).length;
-            
-            // Adjust configuration based on complexity
-            if (subgraphCount > 5 || nodeCount > 15) {{
-                // For complex diagrams with many nodes or subgraphs
-                config.flowchart.nodeSpacing = 100;
-                config.flowchart.rankSpacing = 150;
-                config.flowchart.padding = 80;
-            }} else {{
-                // For simpler diagrams
-                config.flowchart.nodeSpacing = 150;
-                config.flowchart.rankSpacing = 200;
-                config.flowchart.padding = 100;
-            }}
-            
-            return config;
-        }}
-        
-        // Initialize Mermaid with the configuration
-        mermaid.initialize(configureMermaidByDiagramType());
-        
-        // Zoom functionality
-        let zoomLevel = 1.5;
-        const mermaidDiv = document.getElementById('mermaid-diagram');
-        const zoomLevelDisplay = document.getElementById('zoom-level');
-        const diagramContainer = document.querySelector('.diagram-container');
-
-        // Apply initial zoom
-        updateZoom();
-
-        // Update zoom level display and apply zoom
-        function updateZoom() {{
-            zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
-            mermaidDiv.style.transform = `scale(${{zoomLevel}})`;
-        }}
-
-        // Zoom in
-        document.getElementById('zoom-in').addEventListener('click', () => {{
-            zoomLevel = Math.min(zoomLevel + 0.1, 3);
-            updateZoom();
-        }});
-
-        // Zoom out
-        document.getElementById('zoom-out').addEventListener('click', () => {{
-            zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
-            updateZoom();
-        }});
-
-        // Reset zoom
-        document.getElementById('zoom-reset').addEventListener('click', () => {{
-            zoomLevel = 1.5;
-            updateZoom();
-        }});
-        
-        // Add dragging functionality
-        let isDragging = false;
-        let startX, startY, scrollLeft, scrollTop;
-
-        diagramContainer.addEventListener('mousedown', (e) => {{
-            isDragging = true;
-            diagramContainer.classList.add('grabbing');
-            startX = e.pageX - diagramContainer.offsetLeft;
-            startY = e.pageY - diagramContainer.offsetTop;
-            scrollLeft = diagramContainer.scrollLeft;
-            scrollTop = diagramContainer.scrollTop;
-        }});
-
-        diagramContainer.addEventListener('mouseleave', () => {{
-            isDragging = false;
-            diagramContainer.classList.remove('grabbing');
-        }});
-
-        diagramContainer.addEventListener('mouseup', () => {{
-            isDragging = false;
-            diagramContainer.classList.remove('grabbing');
-        }});
-
-        diagramContainer.addEventListener('mousemove', (e) => {{
-            if (!isDragging) return;
-            e.preventDefault();
-            const x = e.pageX - diagramContainer.offsetLeft;
-            const y = e.pageY - diagramContainer.offsetTop;
-            const walkX = (x - startX) * 1.5;
-            const walkY = (y - startY) * 1.5;
-            diagramContainer.scrollLeft = scrollLeft - walkX;
-            diagramContainer.scrollTop = scrollTop - walkY;
-        }});
-    </script>
-</body>
-</html>"""
-
-        # Replace the placeholders with the actual content
-        html_template = html_template.replace("STRUCTURE_CONTENT_PLACEHOLDER", structure_content)
-        html_template = html_template.replace("DEPENDENCIES_CONTENT_PLACEHOLDER", dependencies_content)
-        html_template = html_template.replace("EXECUTION_CONTENT_PLACEHOLDER", execution_content)
-        
-        return html_template
-    
-    def save_html_visualization(self, html_content, output_path):
-        """
-        Save the HTML visualization to a file.
-        
-        Args:
-            html_content: The HTML content to save
-            output_path: The path to save the HTML file to
-        """
-        try:
-            with open(output_path, 'w') as f:
-                f.write(html_content)
-            print(f"Visualization saved to {output_path}")
-            return True
-        except Exception as e:
-            print(f"Error saving visualization: {e}")
-            return False
-    
-    def visualize_codebase(self, output_name="codebase_visualization", open_browser=True, max_nodes=None):
-        """
-        Create all visualizations for the current codebase.
-        
-        Args:
-            output_name: Base name for the output files
-            open_browser: Whether to open the browser to view the visualization
-            max_nodes: Optional limit on number of nodes to include in diagrams (helps with large codebases)
-            
-        Returns:
-            Path to the generated HTML visualization file
-        """
-        if not self.codebase:
-            print("No codebase available for visualization. Please initialize the visualizer with a codebase.")
-            return None
-        
-        # Generate all diagrams
-        structure_content = self._generate_structure_diagram(max_nodes=max_nodes)
-        dependencies_content = self._generate_dependencies_diagram(max_nodes=max_nodes)
-        execution_content = self._generate_execution_paths_diagram()
-        
-        # Ensure content is compatible with Mermaid
-        structure_content = self._ensure_valid_mermaid_syntax(structure_content, "graph")
-        dependencies_content = self._ensure_valid_mermaid_syntax(dependencies_content, "graph")
-        execution_content = self._ensure_valid_mermaid_syntax(execution_content, "graph")
-        
-        # Generate combined HTML file
-        html_content = self.generate_html_visualization(
-            structure_content, 
-            dependencies_content,
-            execution_content
-        )
-        
-        # Save to file
-        output_path = os.path.join(self.output_dir, f"{output_name}.html")
-        self.save_html_visualization(html_content, output_path)
-        
-        # Open in browser if requested
-        if open_browser and output_path:
-            try:
-                import webbrowser
-                webbrowser.open(f"file://{os.path.abspath(output_path)}")
-                print(f"Opening visualization in browser: {output_path}")
-            except Exception as e:
-                print(f"Failed to open browser: {e}")
-        
-        return output_path
-    
-    def _generate_structure_diagram(self, max_nodes=None):
-        """
-        Generate a Mermaid diagram representing the structure of the codebase.
-        
-        Args:
-            max_nodes: Optional limit on the number of nodes to include in the diagram
-            
-        Returns:
-            str: The Mermaid diagram content as a string
-        """
-        if not self.codebase or not hasattr(self.codebase, 'modules') or not self.codebase.modules:
-            return "graph TD\n    A[No module data available]"
-            
-        diagram = "graph TD\n"
-        
-        # Apply size limiting if needed
-        modules_to_include = []
-        if max_nodes and hasattr(self.codebase, 'modules') and len(self.codebase.modules) > max_nodes:
-            print(f"Limiting structure diagram to {max_nodes} most connected modules out of {len(self.codebase.modules)}")
-            
-            # Count connections to rank importance
-            connection_count = {}
-            for module in self.codebase.modules:
-                # Count incoming connections (modules that import this module)
-                incoming = sum(1 for m in self.codebase.modules if hasattr(m, 'imports') and module.name in m.imports)
-                # Count outgoing connections (modules that this module imports)
-                outgoing = len(module.imports) if hasattr(module, 'imports') else 0
-                connection_count[module] = incoming + outgoing
-                
-            # Get the top modules by connection count
-            modules_to_include = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
-            modules_to_include = [module for module, _ in modules_to_include]
-            print(f"Selected {len(modules_to_include)} modules based on connection count")
-        else:
-            # Include all modules if no limit or under the limit
-            modules_to_include = self.codebase.modules
-        
-        # Create nodes for each selected module
-        for module in modules_to_include:
-            module_id = self._sanitize_id(module.name)
-            diagram += f"    {module_id}[{module.name}]\n"
-        
-        # Add connections between modules (only for the selected modules)
-        module_names_to_include = [module.name for module in modules_to_include]
-        for module in modules_to_include:
-            if hasattr(module, 'imports') and module.imports:
-                module_id = self._sanitize_id(module.name)
-                for imported_module in module.imports:
-                    # Only add connections to modules that are included in our selection
-                    if imported_module in module_names_to_include:
-                        imported_id = self._sanitize_id(imported_module)
-                        diagram += f"    {module_id} --> {imported_id}\n"
-        
-        return diagram
-    
-    def _generate_dependencies_diagram(self, max_nodes=None):
-        """
-        Generate a Mermaid diagram representing the dependencies between modules.
-        
-        Args:
-            max_nodes: Optional limit on number of nodes to include (helps with large diagrams)
-            
-        Returns:
-            str: The Mermaid diagram content as a string
-        """
-        if not self.codebase or not hasattr(self.codebase, 'modules') or not self.codebase.modules:
-            return "graph LR\n    A[No dependency data available]"
-        
-        diagram = "graph LR\n"
-        
-        # Apply node limiting if needed
-        modules_to_include = self.codebase.modules
-        if max_nodes and len(self.codebase.modules) > max_nodes:
-            print(f"Limiting dependency diagram to {max_nodes} most connected modules")
-            
-            # Count connections for each module
-            connection_count = {}
-            for module in self.codebase.modules:
-                # Count incoming connections
-                incoming = sum(1 for m in self.codebase.modules if hasattr(m, 'imports') and module.name in m.imports)
-                # Count outgoing connections
-                outgoing = len(module.imports) if hasattr(module, 'imports') else 0
-                connection_count[module.name] = incoming + outgoing
-            
-            # Get top modules by connection count
-            top_modules = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
-            top_module_names = set(name for name, _ in top_modules)
-            
-            # Filter modules
-            modules_to_include = [m for m in self.codebase.modules if m.name in top_module_names]
-            print(f"Selected {len(modules_to_include)} modules based on connection count")
-        
-        # Group modules by package/directory
-        packages = {}
-        for module in modules_to_include:
-            parts = module.name.split('.')
-            if len(parts) > 1:
-                package = parts[0]
-                if package not in packages:
-                    packages[package] = []
-                packages[package].append(module)
-            else:
-                if "root" not in packages:
-                    packages["root"] = []
-                packages["root"].append(module)
-        
-        # Create subgraphs for each package
-        for package, modules in packages.items():
-            package_id = self._sanitize_id(package)
-            diagram += f"    subgraph {package_id}[{package}]\n"
-            
-            for module in modules:
-                module_id = self._sanitize_id(module.name)
-                diagram += f"        {module_id}[{module.name.split('.')[-1]}]\n"
-            
-            diagram += "    end\n"
-        
-        # Add connections between modules
-        for module in modules_to_include:
-            if hasattr(module, 'imports') and module.imports:
-                module_id = self._sanitize_id(module.name)
-                for imported_module in module.imports:
-                    # Only include connections to modules we're including
-                    if any(m.name == imported_module for m in modules_to_include):
-                        imported_id = self._sanitize_id(imported_module)
-                        diagram += f"    {module_id} --> {imported_id}\n"
-        
-        # Add note about limited view if applicable
-        if max_nodes and len(self.codebase.modules) > max_nodes:
-            diagram += "    subgraph Note[\"Size Limitation Note\"]\n"
-            diagram += f"        note[\"Showing {len(modules_to_include)} of {len(self.codebase.modules)} modules. Use filter for more detail.\"]\n"
-            diagram += "    end\n"
-            
-        return diagram
-    
     def _generate_execution_paths_diagram(self):
         """
         Generate a Mermaid diagram representing the execution paths in the codebase.
