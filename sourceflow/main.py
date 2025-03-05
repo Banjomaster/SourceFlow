@@ -27,7 +27,8 @@ def analyze_project(
     formats: Optional[List[str]] = None,
     skip_analysis: bool = False,
     api_key: Optional[str] = None,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    generate_description: bool = True
 ) -> Dict[str, Any]:
     """
     Analyze a code project and generate visualizations.
@@ -39,6 +40,7 @@ def analyze_project(
         skip_analysis: If True, skip code analysis if results exist and load from JSON instead
         api_key: OpenAI API key (override environment variable)
         model: OpenAI model to use (override environment variable)
+        generate_description: If True, generate an application description (defaults to True)
         
     Returns:
         Dictionary with paths to generated visualization files
@@ -97,7 +99,17 @@ def analyze_project(
         # 5. Save analysis data to JSON for future use
         visualizer.export_data(builder_data, output_name="analysis_data")
     
-    # 6. Generate visualizations
+    # 6. Generate application description if requested
+    if generate_description:
+        print("\nGenerating application description...")
+        try:
+            description_file = visualizer.generate_application_description(analysis_cache)
+            print(f"Application description saved to: {description_file}")
+        except Exception as e:
+            print(f"Error generating application description: {str(e)}")
+            print("Continuing with visualization generation...")
+    
+    # 7. Generate visualizations
     print("\nGenerating visualizations...")
     output_files = {}
     
@@ -156,6 +168,11 @@ def main():
         action="store_true",
         help="Generate only the interactive HTML viewer (implies --skip-analysis if analysis data exists)"
     )
+    parser.add_argument(
+        "--no-description", 
+        action="store_true",
+        help="Skip generating the application description"
+    )
     
     args = parser.parse_args()
     
@@ -171,7 +188,8 @@ def main():
         root_dir=args.root_dir,
         output_dir=args.output_dir,
         formats=args.formats,
-        skip_analysis=args.skip_analysis
+        skip_analysis=args.skip_analysis,
+        generate_description=not args.no_description
     )
 
 if __name__ == "__main__":

@@ -141,6 +141,7 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Improved markdown formatting for better readability
 - Node limiting for dependency diagrams to prevent rendering errors
 - Regeneration of diagrams from existing analysis data without rerunning analysis
+- Integration of application description generation into main analysis flow
 
 ### 4.2 In Progress Items ⏳
 - Additional visualization customization options
@@ -152,7 +153,6 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Differential analysis between versions
 - IDE plugins for real-time analysis
 - Enhanced module descriptions and auto-documentation
-- Integration of application description generation into main analysis flow
 
 ## 5. Technical Specifications
 
@@ -220,6 +220,7 @@ The Code Project Analyzer follows a pipeline architecture with the following key
   - Implementation focus areas for new developers
 - Displayed in a dedicated tab within the HTML viewer
 - Properly formatted with code highlighting
+- Automatically generated as part of the main analysis flow (can be disabled with `--no-description` flag)
 
 ### 5.6 Error Handling
 - Retry attempts: 3 per file (configurable)
@@ -266,6 +267,7 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - ✅ Interactive HTML viewer with tabbed interface including Description tab
 - ✅ Node limiting for dependency diagrams to prevent rendering errors
 - ✅ Regeneration of diagrams from existing analysis data
+- ✅ Integration of application description generation into main analysis flow
 - Parallel processing for faster analysis
 - Caching of analysis results
 
@@ -307,5 +309,6 @@ The Code Project Analyzer follows a pipeline architecture with the following key
 - Visualization improvements include color-coding, legends, relationship labels, and HTML formatting for readability
 - Application descriptions are generated using the OPENAI_MODEL specified in the .env file
 - Markdown rendering includes extensions for improved code formatting
-- Application description generation is available through the regenerate_diagrams.py script with the --generate-description flag
+- Application description generation is automatically included in the main analysis flow, with an option to disable it using the `--no-description` flag
+- Application description generation is also available through the regenerate_diagrams.py script with the `--generate-description` flag
 - Node limiting is implemented to prevent rendering errors in large diagrams 
