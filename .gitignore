@@ -5,3 +5,9 @@ test_output/
 
 # Backup files
 *.bak
+# More output directories
+test_results*/
+docs/*/analysis_data.json
+.env
+.DS_Store
+__pycache__/
