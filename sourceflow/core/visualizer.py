@@ -1159,7 +1159,7 @@ class VisualizationGenerator:
 
         // Zoom out
         document.getElementById('zoom-out').addEventListener('click', () => {{
-            zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
+            zoomLevel = Math.max(zoomLevel - 0.1, 0.15);  // Changed from 0.5 to 0.15 (15% minimum zoom)
             updateZoom();
         }});
 
