@@ -1497,6 +1497,9 @@ Format your response in Markdown, with clear headings, bullet points where appro
         
         # Store for access from other methods (needed for execution path lookup)
         self._builder_data = builder_data
+        
+        # Store file summaries for use in structure HTML
+        self._file_summaries = builder_data.get("file_summaries", {})
             
         # Process execution paths
         execution_paths = builder_data.get("execution_paths", [])
@@ -1658,7 +1661,6 @@ Format your response in Markdown, with clear headings, bullet points where appro
             width: 60%;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 16px;
         }
         
         .tabs {
@@ -1670,34 +1672,92 @@ Format your response in Markdown, with clear headings, bullet points where appro
         .tab {
             padding: 10px 20px;
             cursor: pointer;
-            background-color: #f9f9f9;
+            margin-right: 5px;
             border: 1px solid #ddd;
             border-bottom: none;
-            margin-right: 5px;
             border-radius: 4px 4px 0 0;
-            font-weight: 500;
-        }
-        
-        .tab:hover {
-            background-color: #e9e9e9;
+            background-color: #f9f9f9;
         }
         
         .tab.active {
             background-color: #fff;
-            border-bottom-color: #fff;
-            z-index: 1;
+            border-bottom: 1px solid #fff;
         }
         
         .tab-content {
             display: none;
             padding: 20px;
-            background-color: #fff;
             border: 1px solid #ddd;
             border-top: none;
+            background-color: #fff;
         }
         
         .tab-content.active {
             display: block;
+        }
+        
+        .summary-box {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border-left: 4px solid #4d8bc9;
+        }
+        
+        .summary-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .summary-box p {
+            margin: 0;
+        }
+        
+        .legend {
+            display: flex;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+        
+        .visualize-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .visualize-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4d8bc9;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .visualize-link:hover {
+            background-color: #3a6d99;
+        }
+        
+        .directory-header {
+            font-weight: bold;
+            margin-top: 25px;
+            padding: 5px 10px;
+            background-color: #eee;
+            border-radius: 4px;
         }
         
         .module-header {
@@ -1711,6 +1771,17 @@ Format your response in Markdown, with clear headings, bullet points where appro
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        
+        .file-summary-preview {
+            font-size: 0.85em;
+            color: #666;
+            font-style: italic;
+            margin-left: 10px;
+            max-width: 70%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .module-header:after {
@@ -2352,6 +2423,9 @@ Format your response in Markdown, with clear headings, bullet points where appro
             # Organize files by directory for better structure
             root_dir = os.path.commonpath(list(functions_by_file.keys()))
             
+            # Get file summaries if available
+            file_summaries = getattr(self, '_file_summaries', {})
+            
             # Group files by their directory
             files_by_dir = {}
             for file_path in functions_by_file.keys():
@@ -2400,13 +2474,25 @@ Format your response in Markdown, with clear headings, bullet points where appro
                                 module_description = func.get("summary", module_description)
                                 break
 
+                        # Get file summary from file_summaries if available
+                        file_summary = file_summaries.get(file_path, "")
+                        
+                        # Truncate the summary for display in the header
+                        summary_preview = ""
+                        if file_summary:
+                            # Get first sentence or truncate to 60 chars
+                            short_summary = file_summary.split('.')[0] if '.' in file_summary else file_summary
+                            if len(short_summary) > 60:
+                                short_summary = short_summary[:57] + "..."
+                            summary_preview = f' <span class="file-summary-preview">{short_summary}</span>'
+
                         # Simplify the display name for nested modules to just show the filename
                         # But keep the full path in the id for uniqueness
                         display_name = file_name
                                 
                         structure_html += f"""
             <!-- {rel_path} Module -->
-            <h3 data-module="{module_id}" class="module-header">{display_name}</h3>
+            <h3 data-module="{module_id}" class="module-header">{display_name}{summary_preview}</h3>
             <div class="module-content" id="{module_id}-content">
                 <div class="module-description">{module_description}</div>
                 """
