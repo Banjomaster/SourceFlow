@@ -1,52 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
+# Output and result directories
+result/
+results/
+test_output/
 
-# Environment
-.env
-.venv
-venv/
-ENV/
-env/
-aiagents/
-
-# Output directories
-test_results*/
-output/
-diagrams/
-
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-
-# Logs
-*.log
-logs/
-
-# Graphviz temporary files
-*.gv
-*.dot
-
-# Generated files
-analysis_data.json 
+# Backup files
+*.bak
