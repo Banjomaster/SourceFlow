@@ -98,7 +98,16 @@ Analyze this code and extract the following information:
 3. Function calls made within each function/class
 4. External dependencies (imported modules, libraries, etc.)
 5. Potential entry points (main functions, public APIs)
-6. A brief summary of the file's purpose
+6. A concise summary of the file's purpose
+
+IMPORTANT FOR FILE SUMMARY:
+- Be direct and concise when writing the file summary
+- Do NOT start with phrases like "This module...", "This script...", "This file..."
+- Focus only on the core functionality or purpose
+- Examples:
+  * Instead of "This script regenerates diagrams from existing analysis data", write "Regenerates diagrams from existing analysis data"
+  * Instead of "This module handles directory traversal", write "Directory traversal and file identification"
+  * Instead of "This file contains the CLI entry point", write "CLI entry point for running SourceFlow app"
 
 Your response must be ONLY a valid JSON object with the following structure:
 {{
@@ -113,7 +122,7 @@ Your response must be ONLY a valid JSON object with the following structure:
   ],
   "dependencies": ["dependency1", "dependency2"],
   "entry_points": ["entry_point1", "entry_point2"],
-  "summary": "one-line summary of the file purpose"
+  "summary": "concise file purpose without 'This module/script/file...' phrasing"
 }}
 
 IMPORTANT: Your entire response must be valid JSON that can be parsed with Python's json.loads(). Do not include any explanations, markdown formatting, or additional text outside the JSON structure.
