@@ -50,27 +50,6 @@ install_python() {
     fi
 }
 
-# Function to install Graphviz
-install_graphviz() {
-    print_status "Installing Graphviz..."
-    
-    if command_exists brew; then
-        brew install graphviz
-    elif command_exists apt-get; then
-        sudo apt-get update
-        sudo apt-get install -y graphviz
-    elif command_exists dnf; then
-        sudo dnf install -y graphviz
-    elif command_exists yum; then
-        sudo yum install -y graphviz
-    elif command_exists pacman; then
-        sudo pacman -S graphviz
-    else
-        print_error "Could not install Graphviz. Please install Graphviz manually."
-        exit 1
-    fi
-}
-
 # Print welcome message
 echo "======================================"
 echo "   SourceFlow Installation Script"
@@ -97,12 +76,6 @@ if ! command_exists pip3; then
         print_error "Could not install pip. Please install pip manually."
         exit 1
     fi
-fi
-
-# Check for Graphviz
-if ! command_exists dot; then
-    print_warning "Graphviz not found. Installing..."
-    install_graphviz
 fi
 
 # Create virtual environment

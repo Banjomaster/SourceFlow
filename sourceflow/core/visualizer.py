@@ -3,15 +3,13 @@ Visualization Generator Module
 
 This module is responsible for generating visual representations of code structure,
 dependencies, and execution flows based on the analysis results from the relationship builder.
-It supports multiple output formats including Graphviz and Mermaid.
+It uses Mermaid for diagram generation.
 """
 
 import os
-import graphviz
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import json
-import shutil
 import subprocess
 from dotenv import load_dotenv
 import re
@@ -30,8 +28,7 @@ except ImportError:
 
 class VisualizationGenerator:
     """
-    Generates visualizations from code analysis results using different formats.
-    Supports Graphviz and Mermaid diagram generation.
+    Generates visualizations from code analysis results using Mermaid diagrams.
     """
     
     def __init__(
@@ -44,35 +41,14 @@ class VisualizationGenerator:
         
         Args:
             output_dir: Directory to save visualization files (defaults to current directory)
-            formats: List of output formats to generate (defaults to ['png', 'svg', 'mermaid'])
+            formats: List of output formats to generate (defaults to ['mermaid', 'html'])
         """
         self.output_dir = output_dir or os.getcwd()
-        self.formats = formats or ['png', 'svg', 'mermaid', 'html']
-        
-        # Check if Graphviz is installed
-        self.graphviz_available = self._check_graphviz()
-        if not self.graphviz_available:
-            print("WARNING: Graphviz not found. Only Mermaid diagrams and HTML viewer will be generated.")
-            # Filter formats to only include mermaid and html
-            self.formats = [fmt for fmt in self.formats if fmt in ['mermaid', 'html']]
-            if not self.formats:
-                self.formats = ['mermaid', 'html']
+        # Only support Mermaid and HTML formats
+        self.formats = ['mermaid', 'html']
         
         # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
-    
-    def _check_graphviz(self) -> bool:
-        """Check if Graphviz is installed by looking for the 'dot' executable."""
-        # Check if 'dot' is in PATH
-        if shutil.which('dot'):
-            return True
-            
-        # Try to run dot -V to check if it's available
-        try:
-            subprocess.run(['dot', '-V'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            return True
-        except (subprocess.SubprocessError, FileNotFoundError):
-            return False
     
     def generate_function_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_structure", max_nodes: int = None) -> Dict[str, str]:
         """
@@ -88,102 +64,12 @@ class VisualizationGenerator:
         """
         output_files = {}
         
-        # Always generate Mermaid diagrams
-        if 'mermaid' in self.formats or not self.graphviz_available:
-            mermaid = self._generate_mermaid(builder_data, max_nodes=max_nodes)
-            output_path = os.path.join(self.output_dir, f"{output_name}.mmd")
-            with open(output_path, 'w') as f:
-                f.write(mermaid)
-            output_files['mermaid'] = output_path
-        
-        # Only generate Graphviz diagrams if available
-        if self.graphviz_available and any(fmt in self.formats for fmt in ['png', 'svg', 'pdf']):
-            try:
-                # Create Graphviz diagram
-                graph = graphviz.Digraph(
-                    name=output_name,
-                    comment="Code Structure Visualization",
-                    format="png",
-                    engine="dot",
-                    graph_attr={
-                        'rankdir': 'TB',
-                        'splines': 'ortho',
-                        'nodesep': '0.8',
-                        'ranksep': '1.0',
-                        'fontname': 'Arial',
-                        'fontsize': '12',
-                        'concentrate': 'true'
-                    },
-                    node_attr={
-                        'shape': 'box',
-                        'style': 'filled',
-                        'fillcolor': '#f5f5f5',
-                        'fontname': 'Arial',
-                        'fontsize': '10'
-                    },
-                    edge_attr={
-                        'fontname': 'Arial',
-                        'fontsize': '8'
-                    }
-                )
-                
-                # Process functions
-                function_details = builder_data.get('function_details', {})
-                file_functions = builder_data.get('file_functions', {})
-                entry_points = builder_data.get('entry_points', [])
-                function_calls = builder_data.get('function_calls', {})
-                file_summaries = builder_data.get('file_summaries', {})
-                
-                # Create subgraphs for each file
-                for file_path, functions in file_functions.items():
-                    with graph.subgraph(name=f"cluster_{self._sanitize_name(file_path)}") as subgraph:
-                        # Set subgraph attributes
-                        file_name = os.path.basename(file_path)
-                        summary = file_summaries.get(file_path, "")
-                        subgraph.attr(
-                            label=f"{file_name}\n{summary}",
-                            style='filled',
-                            fillcolor='#e8e8e8',
-                            color='gray'
-                        )
-                        
-                        # Add function nodes for this file
-                        for func_name in functions:
-                            details = function_details.get(func_name, {})
-                            label = f"{func_name}\n{details.get('description', '')}"
-                            
-                            # Check if function is an entry point
-                            shape = 'doublecircle' if func_name in entry_points else 'box'
-                            fillcolor = '#d9ead3' if func_name in entry_points else '#f5f5f5'
-                            
-                            subgraph.node(
-                                func_name,
-                                label=label,
-                                shape=shape,
-                                fillcolor=fillcolor
-                            )
-                
-                # Add edges for function calls
-                for func_name, callees in function_calls.items():
-                    for callee in callees:
-                        if callee in function_details:
-                            graph.edge(func_name, callee)
-                
-                # Generate output in all requested formats
-                for fmt in self.formats:
-                    if fmt in ['png', 'svg', 'pdf']:
-                        # Set format and render
-                        graph.format = fmt
-                        output_path = os.path.join(self.output_dir, f"{output_name}")
-                        try:
-                            graph.render(filename=output_path, cleanup=True)
-                            output_files[fmt] = f"{output_path}.{fmt}"
-                        except Exception as e:
-                            print(f"Error generating {fmt} diagram: {e}")
-            
-            except Exception as e:
-                print(f"Error generating Graphviz diagrams: {e}")
-                print("Falling back to Mermaid diagrams only.")
+        # Generate Mermaid diagram
+        mermaid = self._generate_mermaid(builder_data, max_nodes=max_nodes)
+        output_path = os.path.join(self.output_dir, f"{output_name}.mmd")
+        with open(output_path, 'w') as f:
+            f.write(mermaid)
+        output_files['mermaid'] = output_path
         
         return output_files
     

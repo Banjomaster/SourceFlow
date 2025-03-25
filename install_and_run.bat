@@ -56,24 +56,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Check for Graphviz
-dot -V >nul 2>&1
-if %errorlevel% neq 0 (
-    call :print_warning "Graphviz not found. Installing..."
-    
-    :: Download Graphviz installer
-    curl -L -o graphviz_installer.exe https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/8.0.5/windows_10_cmake_Release_graphviz-install-8.0.5-win64.exe
-    
-    :: Install Graphviz
-    graphviz_installer.exe /S
-    
-    :: Clean up
-    del graphviz_installer.exe
-    
-    :: Add Graphviz to PATH
-    setx PATH "%PATH%;C:\Program Files\Graphviz\bin" /M
-)
-
 :: Create virtual environment
 call :print_status "Setting up virtual environment..."
 python -m venv .venv

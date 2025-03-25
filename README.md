@@ -10,7 +10,6 @@ An AI-powered application that analyzes code projects, generates visual represen
   - File dependency diagrams
   - Execution path diagrams
 - **Visualization Formats**:
-  - Graphviz (PNG, SVG, PDF)
   - Mermaid (Markdown)
   - Interactive HTML Viewer with tabbed interface
 - **Analysis Caching**: Save and reuse analysis results
@@ -43,7 +42,6 @@ install_and_run.bat C:\path\to\your\project [output_directory]
 
 The installation scripts will:
 - Install Python if not present
-- Install Graphviz if not present
 - Set up a virtual environment
 - Install all required dependencies
 - Prompt for your OpenAI API key if not set
@@ -75,11 +73,6 @@ If you prefer to install manually, follow these steps:
    OPENAI_MODEL=gpt-4o-mini  # or another compatible model
    ```
 
-5. Install Graphviz (optional, for PNG/SVG diagram generation):
-   - macOS: `brew install graphviz`
-   - Ubuntu/Debian: `sudo apt-get install graphviz`
-   - Windows: Download from [Graphviz website](https://graphviz.org/download/)
-
 ## Usage
 
 ### Most Common Use Case: Generate Interactive HTML Viewer
@@ -109,7 +102,7 @@ python run_analyzer.py /path/to/your/project
 ### Options
 
 - `--output-dir`, `-o`: Specify custom output directory
-- `--formats`, `-f`: Choose output formats (png, svg, pdf, mermaid, html)
+- `--formats`, `-f`: Choose output formats (mermaid, html)
 - `--skip-analysis`, `-s`: Skip analysis if results exist
 - `--html-only`: Generate only the interactive HTML viewer (implies --skip-analysis if analysis data exists)
 - `--no-description`: Skip generating the application description
@@ -197,12 +190,6 @@ Our priority enhancements for the next iteration:
 
 - Python 3.8+
 - OpenAI API key
-- Graphviz (optional, for PNG/SVG diagram generation)
-  - If Graphviz is not installed, only Mermaid diagrams will be generated
-  - To install Graphviz:
-    - macOS: `brew install graphviz`
-    - Ubuntu/Debian: `apt-get install graphviz`
-    - Windows: Download from [Graphviz website](https://graphviz.org/download/)
 
 ## License
 
