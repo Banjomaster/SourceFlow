@@ -12,6 +12,8 @@ from typing import Dict, List, Tuple, Any, Optional
 from openai import OpenAI
 import time
 from dotenv import load_dotenv
+import ast
+import re
 
 # Load environment variables from .env file
 load_dotenv()
@@ -276,7 +278,7 @@ IMPORTANT: Your entire response must be valid JSON that can be parsed with Pytho
     
     def _analyze_large_file(self, file_path: str, code: str) -> Dict[str, Any]:
         """
-        Analyze a large file by chunking it into smaller pieces.
+        Analyze a large file by chunking it into smaller pieces at function and class boundaries.
         
         Args:
             file_path: Path to the code file.
@@ -285,12 +287,297 @@ IMPORTANT: Your entire response must be valid JSON that can be parsed with Pytho
         Returns:
             The combined analysis result as a dictionary.
         """
-        # This is a simplified chunking strategy - in a real implementation, 
-        # we'd want to chunk based on logical boundaries like functions/classes
-        print(f"Analyzing large file {file_path} in chunks...")
+        print(f"Analyzing large file {file_path} at function boundaries...")
         
-        # For now, just analyze the whole file with a simplified request
-        # In a real implementation, we would implement proper chunking
+        # Get file extension to determine language for proper chunking
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        # For Python files, use AST to identify function and class boundaries
+        if file_ext == '.py':
+            try:
+                # Parse the code with ast module
+                tree = ast.parse(code)
+                
+                # Find all function and class definitions with their line numbers
+                chunks = self._extract_ast_chunks(code, tree)
+                
+                # If AST parsing failed or no chunks were found, fall back to simplified analysis
+                if not chunks:
+                    return self._simplified_large_file_analysis(file_path, code)
+                
+                # Analyze each chunk and combine results
+                return self._analyze_chunks(file_path, chunks)
+                
+            except SyntaxError as e:
+                print(f"Syntax error parsing {file_path} with AST: {e}")
+                # Fall back to simplified analysis
+                return self._simplified_large_file_analysis(file_path, code)
+        else:
+            # For non-Python files, use regex-based chunking or simplified analysis
+            # This is a placeholder - in a production system, you'd want language-specific parsers
+            return self._simplified_large_file_analysis(file_path, code)
+
+    def _extract_ast_chunks(self, code: str, tree: ast.AST) -> List[Dict[str, Any]]:
+        """
+        Extract code chunks from an AST tree, preserving function and class boundaries.
+        
+        Args:
+            code: Original source code.
+            tree: AST parse tree.
+            
+        Returns:
+            List of chunks with name, type, content, and line number information.
+        """
+        chunks = []
+        
+        # Get the lines of code for line number reference
+        lines = code.splitlines()
+        
+        # Keep track of where functions/classes start and end
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Function definition
+                name = node.name
+                lineno = node.lineno - 1  # AST line numbers are 1-indexed
+                
+                # Try to get the end line number if available (Python 3.8+)
+                end_lineno = getattr(node, 'end_lineno', None)
+                if end_lineno is not None:
+                    end_lineno -= 1  # Convert to 0-indexed
+                else:
+                    # Estimate end by finding the last line in the function body
+                    end_lineno = max(getattr(child, 'lineno', lineno) for child in ast.walk(node))
+                    
+                # Extract function source
+                func_source = '\n'.join(lines[lineno:end_lineno + 1])
+                
+                chunks.append({
+                    'name': name,
+                    'type': 'function',
+                    'content': func_source,
+                    'lineno': lineno,
+                    'end_lineno': end_lineno
+                })
+                
+            elif isinstance(node, ast.ClassDef):
+                # Class definition
+                name = node.name
+                lineno = node.lineno - 1  # AST line numbers are 1-indexed
+                
+                # Try to get the end line number if available (Python 3.8+)
+                end_lineno = getattr(node, 'end_lineno', None)
+                if end_lineno is not None:
+                    end_lineno -= 1  # Convert to 0-indexed
+                else:
+                    # Estimate end by finding the last line in the class body
+                    end_lineno = max(getattr(child, 'lineno', lineno) for child in ast.walk(node))
+                    
+                # Extract class source
+                class_source = '\n'.join(lines[lineno:end_lineno + 1])
+                
+                chunks.append({
+                    'name': name,
+                    'type': 'class',
+                    'content': class_source,
+                    'lineno': lineno,
+                    'end_lineno': end_lineno
+                })
+        
+        # Sort chunks by line number
+        chunks.sort(key=lambda x: x['lineno'])
+        
+        # Add imports and module-level code as a separate chunk
+        if chunks:
+            first_chunk_start = chunks[0]['lineno']
+            if first_chunk_start > 0:
+                module_code = '\n'.join(lines[:first_chunk_start])
+                chunks.insert(0, {
+                    'name': 'module_imports',
+                    'type': 'module',
+                    'content': module_code,
+                    'lineno': 0,
+                    'end_lineno': first_chunk_start - 1
+                })
+            
+            # Add any code between chunks
+            for i in range(1, len(chunks)):
+                prev_end = chunks[i-1]['end_lineno']
+                curr_start = chunks[i]['lineno']
+                
+                if curr_start - prev_end > 1:  # There's code between chunks
+                    between_code = '\n'.join(lines[prev_end + 1:curr_start])
+                    chunks.insert(i, {
+                        'name': f'module_code_{prev_end + 1}_{curr_start}',
+                        'type': 'module',
+                        'content': between_code,
+                        'lineno': prev_end + 1,
+                        'end_lineno': curr_start - 1
+                    })
+                    
+            # Add any code after the last chunk
+            last_end = chunks[-1]['end_lineno']
+            if last_end < len(lines) - 1:
+                end_code = '\n'.join(lines[last_end + 1:])
+                chunks.append({
+                    'name': 'module_end',
+                    'type': 'module',
+                    'content': end_code,
+                    'lineno': last_end + 1,
+                    'end_lineno': len(lines) - 1
+                })
+        else:
+            # If no functions/classes found, just return the whole file
+            chunks.append({
+                'name': 'whole_module',
+                'type': 'module',
+                'content': code,
+                'lineno': 0,
+                'end_lineno': len(lines) - 1
+            })
+        
+        return chunks
+
+    def _analyze_chunks(self, file_path: str, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Analyze code chunks and combine results.
+        
+        Args:
+            file_path: Path to the code file.
+            chunks: List of code chunks to analyze.
+            
+        Returns:
+            Combined analysis result.
+        """
+        combined_result = {
+            "functions": [],
+            "dependencies": set(),
+            "entry_points": set(),
+            "summary": ""
+        }
+        
+        # Create context information for each chunk
+        context = f"This is a partial analysis of file {os.path.basename(file_path)}."
+        context += " The file has been split into logical sections."
+        
+        # Analyze each chunk
+        for i, chunk in enumerate(chunks):
+            print(f"Analyzing chunk {i+1}/{len(chunks)}: {chunk['name']} ({chunk['type']})")
+            
+            # For very small chunks, skip detailed analysis
+            if len(chunk['content'].strip()) < 10:
+                continue
+            
+            chunk_prompt = f"""
+You are an AI agent specializing in code analysis. Analyze this code CHUNK from a larger file.
+This is chunk {i+1} of {len(chunks)} from file {os.path.basename(file_path)}.
+Chunk type: {chunk['type']}
+Chunk name: {chunk['name']}
+
+{context}
+
+CODE CHUNK TO ANALYZE:
+```
+{chunk['content']}
+```
+
+Provide a focused analysis of this chunk only. Extract:
+1. Functions/classes defined (if any)
+2. Dependencies imported or used
+3. Potential entry points
+4. Brief description of the chunk's purpose
+
+Format as valid JSON with this structure:
+{{
+  "functions": [
+    {{
+      "name": "function_name",
+      "description": "what this function does",
+      "inputs": "description of parameters",
+      "outputs": "description of return values",
+      "calls": ["function_call1", "function_call2"]
+    }}
+  ],
+  "dependencies": ["dependency1", "dependency2"],
+  "entry_points": ["entry_point1", "entry_point2"],
+  "summary": "chunk purpose"
+}}
+"""
+            
+            for attempt in range(self.max_retries):
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": "You are a code analysis assistant that only responds with valid JSON."},
+                            {"role": "user", "content": chunk_prompt}
+                        ],
+                        max_tokens=1000,
+                        temperature=0.1,
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    result = response.choices[0].message.content
+                    parsed_result = self._parse_response(result)
+                    
+                    # Add results to combined result
+                    combined_result["functions"].extend(parsed_result.get("functions", []))
+                    combined_result["dependencies"].update(parsed_result.get("dependencies", []))
+                    combined_result["entry_points"].update(parsed_result.get("entry_points", []))
+                    
+                    # For the first meaningful chunk with a summary, use it as the basis for the file summary
+                    if not combined_result["summary"] and parsed_result.get("summary"):
+                        combined_result["summary"] = parsed_result["summary"]
+                        
+                    # Success, move to next chunk
+                    break
+                    
+                except Exception as e:
+                    print(f"Failed to analyze chunk {i+1} (attempt {attempt+1}): {e}")
+                    if attempt == self.max_retries - 1:
+                        print(f"All attempts failed for chunk {i+1}")
+        
+        # If we have no summary from chunks, try to generate one
+        if not combined_result["summary"]:
+            # Create a high-level summary prompt with just the function names
+            func_names = [f["name"] for f in combined_result["functions"]]
+            summary_prompt = f"""
+This file contains the following functions/classes: {', '.join(func_names)}.
+Provide a one-sentence summary of what this file's purpose is likely to be.
+Response should be plain text, not JSON.
+"""
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": summary_prompt}],
+                    max_tokens=100
+                )
+                combined_result["summary"] = response.choices[0].message.content.strip()
+            except Exception as e:
+                print(f"Failed to generate summary: {e}")
+                combined_result["summary"] = f"Analysis of {os.path.basename(file_path)}"
+        
+        # Convert sets back to lists for JSON serialization
+        combined_result["dependencies"] = list(combined_result["dependencies"])
+        combined_result["entry_points"] = list(combined_result["entry_points"])
+        
+        # Add a note about chunked analysis
+        combined_result["note"] = f"This file was analyzed in {len(chunks)} logical chunks."
+        
+        return combined_result
+
+    def _simplified_large_file_analysis(self, file_path: str, code: str) -> Dict[str, Any]:
+        """
+        Provide a simplified analysis for large files when chunking fails.
+        
+        Args:
+            file_path: Path to the code file.
+            code: The full code content.
+            
+        Returns:
+            Simplified analysis result.
+        """
+        print(f"Using simplified analysis for large file {file_path}...")
+        
         simplified_prompt = f"""
 You are an AI agent specializing in all types of software coding languages. Your job is to analyze code from an unknown project and create clarity and accurate representation of the project. 
 

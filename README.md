@@ -12,7 +12,9 @@ An AI-powered application that analyzes code projects, generates visual represen
 - **Visualization Formats**:
   - Graphviz (PNG, SVG, PDF)
   - Mermaid (Markdown)
+  - Interactive HTML Viewer with tabbed interface
 - **Analysis Caching**: Save and reuse analysis results
+- **Application Description**: AI-generated overview of the codebase
 - **Customizable**: Configure via environment variables
 
 ## Installation
@@ -41,9 +43,25 @@ An AI-powered application that analyzes code projects, generates visual represen
 
 ## Usage
 
+### Most Common Use Case: Generate Interactive HTML Viewer
+
+Analyze a project directory and generate an interactive HTML viewer (the simplest way to visualize your code):
+
+```bash
+python run_analyzer.py /path/to/your/project --output-dir /path/to/output --html-only
+```
+
+This will:
+1. Analyze the codebase (or use cached analysis if available)
+2. Generate an interactive HTML viewer with tabbed interface containing:
+   - Code structure diagram (function calls)
+   - Dependency diagram
+   - Execution path diagram
+   - AI-generated application description
+
 ### Basic Usage
 
-Analyze a project directory and generate visualizations:
+Analyze a project directory and generate all visualization formats:
 
 ```bash
 python run_analyzer.py /path/to/your/project
@@ -52,8 +70,10 @@ python run_analyzer.py /path/to/your/project
 ### Options
 
 - `--output-dir`, `-o`: Specify custom output directory
-- `--formats`, `-f`: Choose output formats (png, svg, pdf, mermaid)
+- `--formats`, `-f`: Choose output formats (png, svg, pdf, mermaid, html)
 - `--skip-analysis`, `-s`: Skip analysis if results exist
+- `--html-only`: Generate only the interactive HTML viewer (implies --skip-analysis if analysis data exists)
+- `--no-description`: Skip generating the application description
 
 ### Examples
 
@@ -72,6 +92,24 @@ Reuse existing analysis to generate new visualizations:
 python run_analyzer.py /path/to/your/project -s
 ```
 
+Generate only HTML output:
+```bash
+python run_analyzer.py /path/to/your/project --html-only
+```
+
+### Regenerating Diagrams
+
+You can regenerate diagrams from existing analysis data without rerunning the analysis using the `regenerate_diagrams.py` script:
+
+```bash
+python regenerate_diagrams.py /path/to/analysis_data.json --output-dir ./new_diagrams
+```
+
+Options:
+- `--output-dir`, `-o`: Directory to save generated diagrams
+- `--max-nodes`, `-m`: Maximum number of nodes to include in dependency diagrams
+- `--generate-description`, `-g`: Generate an application description
+
 ## Implementation Status
 
 The Code Project Analyzer has now reached a fully functional end-to-end state:
@@ -80,6 +118,8 @@ The Code Project Analyzer has now reached a fully functional end-to-end state:
 ✅ **AI-Powered Analysis**: Analyzes functions, dependencies, and relationships  
 ✅ **Relationship Building**: Builds cross-file dependency and call graphs  
 ✅ **Visualization Generation**: Creates multiple diagram types with Mermaid support  
+✅ **Interactive Viewer**: HTML-based viewer with tabbed interface for all diagram types  
+✅ **Application Description**: AI-generated overview of the codebase  
 ✅ **Error Handling**: Robust error recovery and fallback options  
 ✅ **API Integration**: Uses environment variables for custom API key and model  
 
@@ -89,11 +129,11 @@ Current performance: Analysis of 8 Python files completed in approximately 50 se
 
 Our priority enhancements for the next iteration:
 
-⭐ **Enhanced Diagram Readability**: Improve module/function descriptions in diagrams  
-⭐ **Visual Differentiation**: Distinguish between different function types  
-⭐ **Relationship Type Labeling**: Label connections between components  
-⭐ **Flow Direction Annotation**: Show data/control flow more clearly  
-⭐ **Diagram Legend**: Add explanations of diagram elements  
+⭐ **Parallel Processing**: Speed up analysis with concurrent processing  
+⭐ **Caching Improvements**: Better caching of analysis results  
+⭐ **VCS Integration**: Integration with version control systems  
+⭐ **Differential Analysis**: Analyze changes between code versions  
+⭐ **IDE Plugins**: Integration with popular IDEs  
 
 ## How It Works
 
@@ -101,6 +141,7 @@ Our priority enhancements for the next iteration:
 2. **Code Analysis**: Uses AI (via OpenAI API) to analyze each file's functions, classes, dependencies
 3. **Relationship Building**: Aggregates analysis across files to build a comprehensive model
 4. **Visualization**: Generates visual diagrams showing code structure and relationships
+5. **Description Generation**: Creates a comprehensive overview of the codebase
 
 ## Project Structure
 
@@ -111,6 +152,7 @@ Our priority enhancements for the next iteration:
   - `visualizer.py`: Diagram generation
 - `sourceflow/main.py`: Orchestrator module
 - `run_analyzer.py`: Entry point script
+- `regenerate_diagrams.py`: Utility for regenerating diagrams from existing analysis
 
 ## Requirements
 
