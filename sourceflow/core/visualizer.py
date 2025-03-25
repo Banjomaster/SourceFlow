@@ -36,19 +36,17 @@ class VisualizationGenerator:
         output_dir: Optional[str] = None,
         formats: Optional[List[str]] = None
     ):
-        """
-        Initialize the visualization generator.
-        
+        """Initialize the visualization generator.
+
         Args:
-            output_dir: Directory to save visualization files (defaults to current directory)
-            formats: List of output formats to generate (defaults to ['mermaid', 'html'])
+            output_dir (Optional[str], optional): Directory to save output files. Defaults to None.
+            formats (Optional[List[str]], optional): List of output formats. Defaults to None.
         """
-        self.output_dir = output_dir or os.getcwd()
-        # Only support Mermaid and HTML formats
-        self.formats = ['mermaid', 'html']
-        
-        # Ensure output directory exists
+        self.output_dir = output_dir or "output"
         os.makedirs(self.output_dir, exist_ok=True)
+        
+        # Default to HTML and Mermaid if no formats specified
+        self.formats = formats or ['html', 'mermaid']
     
     def generate_function_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_structure", max_nodes: int = None) -> Dict[str, str]:
         """
@@ -74,112 +72,32 @@ class VisualizationGenerator:
         return output_files
     
     def generate_dependency_diagram(self, builder_data: Dict[str, Any], output_name: str = "code_dependencies", max_nodes: int = None) -> Dict[str, str]:
-        """
-        Generate module/file dependency diagrams using data from the relationship builder.
-        
+        """Generate a diagram showing dependencies between files.
+
         Args:
-            builder_data: Data from the RelationshipBuilder's get_summary method
-            output_name: Base name for the output files
-            max_nodes: Optional limit on number of nodes to include (helps with large diagrams)
-            
+            builder_data (Dict[str, Any]): The analysis data from the builder
+            output_name (str, optional): Base name for output files. Defaults to "code_dependencies".
+            max_nodes (int, optional): Maximum number of nodes to include. Defaults to None.
+
         Returns:
-            Dictionary mapping format names to output file paths
+            Dict[str, str]: Dictionary mapping output formats to file paths
         """
         output_files = {}
         
-        # Always generate Mermaid diagrams
-        if 'mermaid' in self.formats or not self.graphviz_available:
-            mermaid = self._generate_dependency_mermaid(builder_data, max_nodes=max_nodes)
-            output_path = os.path.join(self.output_dir, f"{output_name}.mmd")
-            with open(output_path, 'w') as f:
-                f.write(mermaid)
-            output_files['mermaid'] = output_path
-        
-        # Only generate Graphviz diagrams if available
-        if self.graphviz_available and any(fmt in self.formats for fmt in ['png', 'svg', 'pdf']):
-            try:
-                # Create Graphviz diagram for dependencies
-                graph = graphviz.Digraph(
-                    name=output_name,
-                    comment="Code Dependencies Visualization",
-                    format="png",
-                    engine="dot",
-                    graph_attr={
-                        'rankdir': 'LR',
-                        'splines': 'true',
-                        'nodesep': '0.5',
-                        'ranksep': '1.5',
-                        'fontname': 'Arial',
-                        'fontsize': '12'
-                    },
-                    node_attr={
-                        'shape': 'box',
-                        'style': 'filled',
-                        'fillcolor': '#e6f3ff',
-                        'fontname': 'Arial',
-                        'fontsize': '10'
-                    }
-                )
-                
-                # Process file dependencies
-                file_dependencies = builder_data.get('file_dependencies', {})
-                file_summaries = builder_data.get('file_summaries', {})
-                
-                # Debug: Print found dependencies
-                print("DEBUG: File dependencies found in builder data:")
-                for source, targets in file_dependencies.items():
-                    if targets:  # Only print if there are dependencies
-                        print(f"  - {os.path.basename(source)} depends on: {', '.join(os.path.basename(t) for t in targets)}")
-                
-                # Apply node limiting if specified for Graphviz as well
-                nodes_to_include = set(file_summaries.keys())
-                if max_nodes and len(file_summaries) > max_nodes:
-                    # Calculate connection count for importance ranking
-                    connection_count = {}
-                    for file_path in file_summaries:
-                        # Count incoming connections
-                        incoming = sum(1 for deps in file_dependencies.values() if file_path in deps)
-                        # Count outgoing connections
-                        outgoing = len(file_dependencies.get(file_path, []))
-                        connection_count[file_path] = incoming + outgoing
-                    
-                    # Get top files by connection count
-                    top_files = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)[:max_nodes]
-                    nodes_to_include = set(file_path for file_path, _ in top_files)
-                
-                # Add nodes for each file
-                for file_path, summary in file_summaries.items():
-                    if file_path in nodes_to_include:  # Only include selected nodes
-                        file_name = os.path.basename(file_path)
-                        graph.node(
-                            file_path,
-                            label=f"{file_name}\n{summary[:30]}...",
-                            tooltip=summary
-                        )
-                
-                # Add edges for dependencies
-                for file_path, dependencies in file_dependencies.items():
-                    if file_path in nodes_to_include:  # Only include selected source nodes
-                        for dependency in dependencies:
-                            if dependency in nodes_to_include:  # Only include selected target nodes
-                                if dependency in file_summaries:
-                                    graph.edge(file_path, dependency, style='dashed')
-                
-                # Generate output in all requested formats
-                for fmt in self.formats:
-                    if fmt in ['png', 'svg', 'pdf']:
-                        # Set format and render
-                        graph.format = fmt
-                        output_path = os.path.join(self.output_dir, f"{output_name}")
-                        try:
-                            graph.render(filename=output_path, cleanup=True)
-                            output_files[fmt] = f"{output_path}.{fmt}"
-                        except Exception as e:
-                            print(f"Error generating {fmt} diagram: {e}")
+        # Generate Mermaid diagram
+        mermaid_content = self._generate_dependency_mermaid(builder_data, max_nodes)
+        if 'mermaid' in self.formats:
+            mermaid_file = os.path.join(self.output_dir, f"{output_name}.mmd")
+            with open(mermaid_file, 'w') as f:
+                f.write(mermaid_content)
+            output_files['mermaid'] = mermaid_file
             
-            except Exception as e:
-                print(f"Error generating Graphviz diagrams: {e}")
-                print("Falling back to Mermaid diagrams only.")
+            # Also generate individual HTML file for this diagram
+            if 'html' in self.formats:
+                title = "Code Dependencies"
+                description = "This diagram shows dependencies between files in the codebase."
+                html_file = self._generate_individual_diagram_html(mermaid_content, output_name, title, description)
+                output_files['html'] = html_file
         
         return output_files
     
