@@ -567,67 +567,215 @@ Response should be plain text, not JSON.
 
     def _simplified_large_file_analysis(self, file_path: str, code: str) -> Dict[str, Any]:
         """
-        Provide a simplified analysis for large files when chunking fails.
+        Provide a smart analysis for large files using language-aware prompting.
         
         Args:
             file_path: Path to the code file.
             code: The full code content.
             
         Returns:
-            Simplified analysis result.
+            Enhanced analysis result with structural information.
         """
-        print(f"Using simplified analysis for large file {file_path}...")
+        # Determine the language from file extension
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        # Map file extensions to language names
+        language_map = {
+            '.py': 'Python',
+            '.js': 'JavaScript',
+            '.ts': 'TypeScript',
+            '.jsx': 'React JSX',
+            '.tsx': 'React TSX',
+            '.java': 'Java',
+            '.cpp': 'C++',
+            '.hpp': 'C++',
+            '.c': 'C',
+            '.h': 'C',
+            '.go': 'Go',
+            '.rb': 'Ruby',
+            '.php': 'PHP',
+            '.swift': 'Swift',
+            '.kt': 'Kotlin',
+            '.rs': 'Rust',
+            '.scala': 'Scala',
+            '.cs': 'C#',
+            '.fs': 'F#',
+            '.r': 'R',
+            '.m': 'Objective-C',
+            '.sql': 'SQL',
+            '.sh': 'Shell',
+            '.ps1': 'PowerShell'
+        }
+        
+        language = language_map.get(file_ext, 'Unknown')
+        print(f"Analyzing {language} file: {file_path}")
         
         simplified_prompt = f"""
-You are an AI agent specializing in all types of software coding languages. Your job is to analyze code from an unknown project and create clarity and accurate representation of the project. 
+You are an expert code analyzer specializing in {language} and other programming languages. Your task is to perform a STRUCTURAL analysis of the following code, similar to what an AST (Abstract Syntax Tree) parser would provide, but using your understanding of {language} syntax and patterns.
 
-This is a large file, so I'm asking for a HIGH-LEVEL analysis only. Here is the code:
-
+CODE TO ANALYZE ({language}):
+```{file_ext}
 {code}
+```
 
-Please identify:
-1. The main purpose of this file
-2. Major components (classes, functions) defined
-3. Key external dependencies
-4. Potential entry points
+ANALYSIS INSTRUCTIONS:
+1. STRUCTURAL BREAKDOWN:
+   - Identify all code blocks (functions, classes, methods, etc.) with their exact line spans
+   - Note any nested structures (e.g., inner classes, nested functions)
+   - Identify scope boundaries and code organization patterns
 
-Format your response as valid JSON with the following structure:
+2. COMPONENT IDENTIFICATION:
+   - Find all major code components (functions, classes, interfaces, etc.)
+   - Identify their relationships and dependencies
+   - Note any design patterns or architectural structures
+
+3. DETAILED ANALYSIS:
+   - For each identified component:
+     * Exact location (start and end lines)
+     * Scope and visibility (public, private, etc.)
+     * Parameters and return types
+     * Dependencies and relationships
+     * Internal function calls
+     * External dependencies
+
+4. LANGUAGE-SPECIFIC FEATURES:
+   - Identify {language}-specific patterns and idioms
+   - Note any framework-specific code structures
+   - Highlight language-specific optimizations or concerns
+
+Format your response as a valid JSON object with this enhanced structure:
 {{
-  "functions": [
+  "file_type": "{language}",
+  "components": [
     {{
-      "name": "fully_qualified_name",
-      "description": "description of the function (high-level only)"
+      "type": "function|class|method|interface|etc",
+      "name": "component_name",
+      "start_line": line_number,
+      "end_line": line_number,
+      "scope": "public|private|protected|etc",
+      "description": "what this component does",
+      "inputs": "parameter descriptions",
+      "outputs": "return value descriptions",
+      "calls": ["function_calls"],
+      "dependencies": ["external_dependencies"],
+      "parent": "parent_component_if_nested",
+      "language_specific": {{
+        "patterns": ["relevant_language_patterns"],
+        "features": ["language_specific_features_used"]
+      }}
     }}
   ],
-  "dependencies": ["dependency1", "dependency2"],
-  "entry_points": ["entry_point1", "entry_point2"],
-  "summary": "general purpose of the file"
+  "structure": {{
+    "imports": ["list_of_imports"],
+    "global_scope": ["global_variables_or_constants"],
+    "namespaces": ["identified_namespaces"],
+    "exports": ["exported_components"]
+  }},
+  "dependencies": {
+    "external": ["external_dependencies"],
+    "internal": ["internal_module_dependencies"]
+  },
+  "entry_points": ["potential_entry_points"],
+  "summary": "concise_file_purpose",
+  "language_features": ["language_specific_features_used"],
+  "complexity_analysis": {{
+    "cyclomatic_complexity": "estimated_complexity",
+    "nesting_depth": "max_nesting_depth",
+    "component_count": "number_of_components"
+  }}
 }}
 
-Ensure the JSON is properly formatted and can be parsed by Python's json.loads().
+IMPORTANT: 
+- Focus on STRUCTURAL analysis similar to AST parsing
+- Maintain precise line number tracking
+- Identify nested relationships accurately
+- Pay special attention to {language}-specific patterns
+- Ensure all JSON is properly formatted and can be parsed by Python's json.loads()
 """
         
         for attempt in range(self.max_retries):
             try:
-                print(f"Analyzing large file {file_path} (attempt {attempt + 1}/{self.max_retries})...")
+                print(f"Analyzing file {file_path} (attempt {attempt + 1}/{self.max_retries})...")
                 response = self.client.chat.completions.create(
                     model=self.model,
-                    messages=[{"role": "user", "content": simplified_prompt}],
-                    max_tokens=1500
+                    messages=[
+                        {"role": "system", "content": "You are a code analysis expert that specializes in providing detailed structural analysis of source code. You focus on accuracy and precision, similar to an AST parser."},
+                        {"role": "user", "content": simplified_prompt}
+                    ],
+                    max_tokens=2000,
+                    temperature=0.1,
+                    response_format={"type": "json_object"}
                 )
                 
                 result = response.choices[0].message.content
                 parsed_result = self._parse_response(result)
                 
-                # Add a note that this is a simplified analysis
-                parsed_result["note"] = "This is a simplified analysis due to the large file size. Some details may be missing."
+                # Convert the enhanced format to our standard format
+                standardized_result = self._standardize_analysis_result(parsed_result, language)
                 
-                return parsed_result
+                # Add analysis metadata
+                standardized_result["analysis_type"] = "language_aware_structural"
+                standardized_result["language"] = language
+                
+                return standardized_result
+                
             except Exception as e:
                 print(f"Attempt {attempt + 1} failed: {e}")
                 if attempt < self.max_retries - 1:
                     print(f"Retrying in {self.retry_delay} seconds...")
                     time.sleep(self.retry_delay)
                 else:
-                    print(f"All {self.max_retries} attempts failed for large file {file_path}")
-                    raise 
+                    print(f"All {self.max_retries} attempts failed for file {file_path}")
+                    raise
+
+    def _standardize_analysis_result(self, enhanced_result: Dict[str, Any], language: str) -> Dict[str, Any]:
+        """
+        Convert the enhanced analysis format to our standard format.
+        
+        Args:
+            enhanced_result: The enhanced analysis result.
+            language: The programming language.
+            
+        Returns:
+            Standardized analysis result.
+        """
+        standard_result = {
+            "functions": [],
+            "dependencies": [],
+            "entry_points": enhanced_result.get("entry_points", []),
+            "summary": enhanced_result.get("summary", ""),
+            "language_info": {
+                "name": language,
+                "features": enhanced_result.get("language_features", []),
+                "complexity": enhanced_result.get("complexity_analysis", {})
+            }
+        }
+        
+        # Convert components to our standard function format
+        for component in enhanced_result.get("components", []):
+            standard_result["functions"].append({
+                "name": component["name"],
+                "description": component["description"],
+                "inputs": component["inputs"],
+                "outputs": component["outputs"],
+                "calls": component["calls"],
+                "location": {
+                    "start_line": component["start_line"],
+                    "end_line": component["end_line"]
+                },
+                "metadata": {
+                    "type": component["type"],
+                    "scope": component["scope"],
+                    "language_specific": component.get("language_specific", {})
+                }
+            })
+        
+        # Combine all dependencies
+        if "dependencies" in enhanced_result:
+            standard_result["dependencies"].extend(enhanced_result["dependencies"].get("external", []))
+            standard_result["dependencies"].extend(enhanced_result["dependencies"].get("internal", []))
+        
+        # Add structure information
+        standard_result["structure"] = enhanced_result.get("structure", {})
+        
+        return standard_result 

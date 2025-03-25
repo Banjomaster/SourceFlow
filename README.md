@@ -19,6 +19,40 @@ An AI-powered application that analyzes code projects, generates visual represen
 
 ## Installation
 
+### Quick Start (Recommended)
+
+#### For Unix/macOS Users:
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/sourceflow.git
+cd sourceflow
+
+# Run the installation script and analyze a directory
+./install_and_run.sh /path/to/your/project [output_directory]
+```
+
+#### For Windows Users:
+```batch
+# Clone the repository
+git clone https://github.com/yourusername/sourceflow.git
+cd sourceflow
+
+# Run the installation script and analyze a directory
+install_and_run.bat C:\path\to\your\project [output_directory]
+```
+
+The installation scripts will:
+- Install Python if not present
+- Install Graphviz if not present
+- Set up a virtual environment
+- Install all required dependencies
+- Prompt for your OpenAI API key if not set
+- Run the analysis on your specified directory
+
+### Manual Installation
+
+If you prefer to install manually, follow these steps:
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/sourceflow.git
@@ -40,6 +74,11 @@ An AI-powered application that analyzes code projects, generates visual represen
    OPENAI_API_KEY=your_api_key_here
    OPENAI_MODEL=gpt-4o-mini  # or another compatible model
    ```
+
+5. Install Graphviz (optional, for PNG/SVG diagram generation):
+   - macOS: `brew install graphviz`
+   - Ubuntu/Debian: `sudo apt-get install graphviz`
+   - Windows: Download from [Graphviz website](https://graphviz.org/download/)
 
 ## Usage
 
