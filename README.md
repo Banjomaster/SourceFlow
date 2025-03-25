@@ -24,8 +24,8 @@ An AI-powered application that analyzes code projects, generates visual represen
 #### For Unix/macOS Users:
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sourceflow.git
-cd sourceflow
+git clone https://github.com/Banjomaster/SourceFlow.git
+cd SourceFlow
 
 # Run the installation script and analyze a directory
 ./install_and_run.sh /path/to/your/project [output_directory]
@@ -34,8 +34,8 @@ cd sourceflow
 #### For Windows Users:
 ```batch
 # Clone the repository
-git clone https://github.com/yourusername/sourceflow.git
-cd sourceflow
+git clone https://github.com/Banjomaster/SourceFlow.git
+cd SourceFlow
 
 # Run the installation script and analyze a directory
 install_and_run.bat C:\path\to\your\project [output_directory]
@@ -55,8 +55,8 @@ If you prefer to install manually, follow these steps:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/sourceflow.git
-   cd sourceflow
+   git clone https://github.com/Banjomaster/SourceFlow.git
+   cd SourceFlow
    ```
 
 2. Install the required dependencies:
